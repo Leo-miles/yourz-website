@@ -5,7 +5,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends unzip \
     && unzip -q /tmp/yourz-app-source.zip -d /app \
     && rm /tmp/yourz-app-source.zip \
     && mkdir -p /app/data \
-    && chown -R node:node /app
+    && chown -R node:node /app \
+    && rm -rf /var/lib/apt/lists/*
 USER node
 ENV NODE_ENV=production PORT=3000 DATABASE_PATH=/app/data/factory.sqlite
 EXPOSE 3000
