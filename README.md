@@ -6,7 +6,7 @@
 
 ## 本次部署包
 
-从 ChatGPT 对话中下载 `cloudflare-project.tar.gz`，然后在此仓库页面选择 **Add file → Upload files**，把压缩包上传到仓库根目录并提交。请上传原始压缩包，不要重新压缩或改名。
+从 ChatGPT 对话中下载 `yourz-cloudflare-deploy.tar.gz`，然后在此仓库页面选择 **Add file → Upload files**，把压缩包上传到仓库根目录并提交。请上传原始压缩包，不要重新压缩或改名。
 
 ## Cloudflare Pages 设置
 
@@ -14,7 +14,7 @@
 2. 选择 GitHub 仓库 `Leo-miles/yourz-website`，生产分支为 `main`。
 3. Framework preset 选 **None**，Build command 填：
 
-   `tar -xzf cloudflare-project.tar.gz -C .`
+   `tar -xzf yourz-cloudflare-deploy.tar.gz -C .`
 
 4. Build output directory 填：
 
