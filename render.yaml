@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: yourz-factory-database
+    runtime: docker
+    plan: 0.5c-512mb
+    region: singapore
+    healthCheckPath: /healthz
+    autoDeployTrigger: commit
+    domains:
+      - yourz.top
+    disk:
+      name: factory-data
+      mountPath: /app/data
+      sizeGB: 1
+    envVars:
+      - key: AUTH_MODE
+        value: local
+      - key: BASE_URL
+        value: https://yourz.top
+      - key: TIME_ZONE
+        value: Asia/Shanghai
+      - key: LOCAL_ADMIN_USER
+        sync: false
+      - key: LOCAL_ADMIN_PASSWORD
+        sync: false
