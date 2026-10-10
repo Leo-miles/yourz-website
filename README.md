@@ -1,77 +1,48 @@
-# yourz.top 工厂资料库（腾讯云自托管）
+# yourz.top 工厂资料库（免购买服务器版本）
 
-本仓库用于部署工厂资料库应用。**不使用 Render**，直接在腾讯云轻量应用服务器上用 Docker Compose 运行 Node.js + SQLite，并由 Caddy 自动处理 HTTPS。
+本项目的最新运行版本使用 **Cloudflare Pages + Pages Functions + D1**，不用购买或维护传统 Linux 服务器。网页静态文件和后端接口托管在 Cloudflare，D1 保存同事共享的业务数据。
 
-## 当前版本
+> 注意：Cloudflare Pages 版本已经在本地通过功能模拟测试，但尚未部署到 Cloudflare 生产环境。创建 Pages 项目、绑定 D1、设置管理员密码和配置域名仍需在对应控制台完成。免费额度有上限，不能把“本地测试通过”等同于“线上已验收”。
 
-- 使用同一个服务器端 SQLite 数据库，员工看到和修改的是同一份记录。
-- 包含工厂档案、库存核实、沟通历史、联系人、跟进事项、搜索、回收站、团队权限、CSV 导出和 JSON 备份/恢复。
-- 企业微信未接入前使用临时本地团队账号。管理员可在 Team 页面为同事创建独立账号并设置只读/可编辑权限。以后切换企业微信登录时，共享数据库可以保留。
-- 初始数据为空；不会自动导入 Excel，也不会生成虚构工厂资料。
-- 临时账号用于第一阶段同事协作，不是企业微信身份。不要把资料库设成匿名公开编辑。
+## 本次部署包
 
-## 一、购买服务器
+从 ChatGPT 对话中下载 `cloudflare-project.tar.gz`，然后在此仓库页面选择 **Add file → Upload files**，把压缩包上传到仓库根目录并提交。请上传原始压缩包，不要重新压缩或改名。
 
-腾讯云官方产品页：https://cloud.tencent.com/product/lighthouse
+## Cloudflare Pages 设置
 
-建议起步配置：Linux、2 核 CPU、2 GB 内存、40 GB SSD、分配公网 IPv4。应用需要持续运行的 Node.js 服务和持久化磁盘，不能用纯静态网页托管替代。
+1. 登录 https://dash.cloudflare.com/，进入 **Workers & Pages → Create application → Pages → Connect to Git**。
+2. 选择 GitHub 仓库 `Leo-miles/yourz-website`，生产分支为 `main`。
+3. Framework preset 选 **None**，Build command 填：
 
-地域选择：
-- 希望先快速上线、暂不处理 ICP 备案：可考虑中国香港节点。中国内地访问香港节点可能出现延迟或丢包，正式供义乌、深圳同事长期使用前应实际测试。
-- 希望长期稳定用于中国大陆团队：选择中国大陆节点，但绑定域名前需完成 ICP 备案。域名目前实名在个人名下，企业用途的备案主体和域名实名一致性需先确认。
+   `tar -xzf cloudflare-project.tar.gz -C .`
 
-腾讯云地域/网络说明：https://cloud.tencent.com/document/product/1207/50103
-价格以购买时控制台为准：https://cloud.tencent.com/document/product/1207/73452
+4. Build output directory 填：
 
-在轻量服务器防火墙/安全组中放通入站 TCP 80 和 443。管理 SSH 的 22 端口建议只允许自己的管理 IP，或使用腾讯云控制台 WebShell。
+   `public`
 
-## 二、域名解析
+5. 创建 Pages 项目并等待首次构建。构建成功后访问 Cloudflare 分配的 `*.pages.dev` 地址，先不改域名 DNS。
 
-取得服务器公网 IPv4 后，在域名 DNS 管理里添加一条记录：主机记录 @，记录类型 A，记录值填写服务器公网 IPv4，TTL 使用默认值即可。如存在指向旧服务器的冲突 A/AAAA 记录，确认无用后再移除。不要在确认目标地址前填写 DNS。
+## 创建共享数据库
 
-## 三、在服务器部署
+1. 在 Cloudflare 控制台打开 **Storage & databases → D1 SQL Database**，创建数据库，名称可用 `yourz-factory-db`。
+2. 进入 Pages 项目 **Settings → Functions → D1 database bindings**，添加绑定：变量名 `DB`，数据库选择刚刚创建的数据库。
+3. 在 Pages 项目 Settings → Variables and Secrets 的 Production 环境中添加：
+   - `BOOTSTRAP_ADMIN_USER`：管理员用户名，例如 `admin`。
+   - `BOOTSTRAP_ADMIN_PASSWORD`：设置为 Secret，使用至少 16 位随机强密码。
+4. 保存后重新部署。首次进入 `/healthz` 应返回成功，随后打开网站登录管理员账号。请勿把管理员密码、会话 Cookie 或任何密钥发到聊天或写入代码仓库。
+5. 管理员进入 Team / 团队，为同事分别创建账号并分配 Viewer（只读）或 Editor（可编辑）权限。不同账号使用的是同一个 D1 数据库。
 
-通过腾讯云控制台 WebShell 登录服务器，安装 Docker。依次执行：
+## 绑定 yourz.top
 
-    sudo apt-get update
-    sudo apt-get install -y ca-certificates curl git
-    curl -fsSL https://get.docker.com | sudo sh
-    sudo systemctl enable --now docker
+确认 `*.pages.dev` 网站及共享功能测试通过后，再在 Pages 项目 **Custom domains → Set up a domain** 添加 `yourz.top`。
 
-克隆仓库并准备配置：
+根域名需要先将 `yourz.top` 加为 Cloudflare zone 并把域名注册商处的 nameservers 改为 Cloudflare 指定的 nameservers。修改之前，若有企业邮箱或其他 DNS 记录，须先核对并搬入相应的 MX、TXT、CNAME 等记录，避免影响邮件或其他服务。不要照抄网上示例 IP；只使用 Cloudflare 控制台为你当前站点生成的指引。Cloudflare 验证通过后会自动配置 HTTPS。
 
-    sudo git clone https://github.com/Leo-miles/yourz-website.git /opt/yourz-website
-    cd /opt/yourz-website
-    sudo cp .env.example .env
-    sudo nano .env
+## 功能与数据
 
-编辑 .env，设置 DOMAIN=yourz.top、BASE_URL=https://yourz.top、AUTH_MODE=local、LOCAL_ADMIN_USER=admin、TIME_ZONE=Asia/Shanghai。为 LOCAL_ADMIN_PASSWORD 填写你自己生成的长随机密码（至少 14 个字符）。只填在服务器的 .env 文件，不要发在聊天里或提交到 GitHub。首次启动前设置好；管理员账号创建后，仅修改此变量不会自动重置数据库里的密码。
-
-启动并查看状态：
-
-    sudo docker compose up -d --build
-    sudo docker compose ps
-    sudo docker compose logs --tail=100 app web
-
-确认 app 和 web 运行正常。Caddy 会在域名已解析到此服务器、外部可访问 80/443 且证书验证通过时自动申请 HTTPS。随后打开 https://yourz.top。
-
-## 四、创建同事账号并验证共享
-
-1. 用管理员账号进入网站。
-2. 打开 Team / 团队权限，为每位同事创建独立账号，选择只读或可编辑权限。
-3. 用第二个账号/另一台设备新增测试工厂记录，再确认另一个账号能看到它。
-4. 测试搜索、保存、库存和沟通关联记录、回收站、CSV 导出和 JSON 备份。
-5. 定期下载应用内备份，并在腾讯云控制台配置快照。数据库保存在 Docker 持久化卷中，不要删除数据卷。
-
-## 常用维护命令
-
-    cd /opt/yourz-website
-    sudo docker compose logs -f app web
-    sudo docker compose restart app web
-    sudo docker compose up -d --build
-
-不要运行 docker compose down -v，因为它会删除持久化数据卷。服务器 .env 和数据库备份应保存在公司可控的安全位置。
-
-## 后续企业微信和小程序
-
-本阶段不需要企业微信凭据。等网页运行、同事协作验证完成后，再单独配置企业微信自建应用、可信域名和服务器可信 IP。小程序是后续的独立接入工作，网站上线不代表小程序已经完成。
+- 当前阶段用临时本地账号登录，企业微信及小程序暂不接入。
+- 业务数据初始为空，不自动导入 `Supplier_Factory_Database.xlsx`。
+- 本地测试覆盖：首次管理员初始化、独立账号登录、不同账号读取共享状态、新建员工、只读/可编辑角色、冲突保护、备份及退出。
+- D1 免费计划有每日读写和存储额度限制；超过额度时当天的数据库查询可能失败。请定期使用系统备份，并安全保管离线备份。
+- Cloudflare 全球节点不等于中国大陆专属网络。正式让义乌、深圳同事长期使用前，要实测当地网络速度及稳定性。
+- 企业微信及小程序将在下一阶段单独接入，不会在本次部署中配置它们。
