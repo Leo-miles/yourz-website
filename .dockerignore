@@ -1,0 +1,8 @@
+.git
+.env
+data
+*.sqlite
+*.sqlite-*
+*.sqlite-shm
+*.sqlite-wal
+wecom-verification
