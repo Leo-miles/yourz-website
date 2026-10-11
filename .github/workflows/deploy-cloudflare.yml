@@ -38,6 +38,8 @@ jobs:
           set -euo pipefail
           test -n "$CLOUDFLARE_API_TOKEN" || { echo "::error::缺少 CLOUDFLARE_API_TOKEN，请在 GitHub 密钥设置中添加。"; exit 1; }
           test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo "::error::缺少 CLOUDFLARE_ACCOUNT_ID，请在 GitHub 密钥设置中添加。"; exit 1; }
+          test -n "$BOOTSTRAP_ADMIN_USER" || { echo "::error::缺少 BOOTSTRAP_ADMIN_USER，请先添加初始管理员用户名。"; exit 1; }
+          test -n "$BOOTSTRAP_ADMIN_PASSWORD" || { echo "::error::缺少 BOOTSTRAP_ADMIN_PASSWORD，请先添加初始管理员密码。"; exit 1; }
 
       - name: 校验并解压网站程序
         shell: bash
@@ -131,22 +133,18 @@ jobs:
           database_id = "$DB_ID"
           EOF
 
-      - name: 设置初始管理员（如已配置）
+      - name: 设置初始管理员
         working-directory: app
         shell: bash
         run: |
           set -euo pipefail
-          if [[ -n "$BOOTSTRAP_ADMIN_USER" && -n "$BOOTSTRAP_ADMIN_PASSWORD" ]]; then
-            node -e 'const fs=require("node:fs");fs.writeFileSync("/tmp/yourz-secrets.json",JSON.stringify({BOOTSTRAP_ADMIN_USER:process.env.BOOTSTRAP_ADMIN_USER,BOOTSTRAP_ADMIN_PASSWORD:process.env.BOOTSTRAP_ADMIN_PASSWORD}));'
-            wrangler pages secret bulk /tmp/yourz-secrets.json --project-name "$PROJECT_NAME"
-            rm -f /tmp/yourz-secrets.json
-          else
-            echo "::warning::还没设置初始管理员。请在 GitHub 密钥中添加 BOOTSTRAP_ADMIN_USER 和 BOOTSTRAP_ADMIN_PASSWORD 后重新发布，设置前暂时无法登录。"
-          fi
+          node -e 'const fs=require("node:fs");fs.writeFileSync("/tmp/yourz-secrets.json",JSON.stringify({BOOTSTRAP_ADMIN_USER:process.env.BOOTSTRAP_ADMIN_USER,BOOTSTRAP_ADMIN_PASSWORD:process.env.BOOTSTRAP_ADMIN_PASSWORD}));'
+          wrangler pages secret bulk /tmp/yourz-secrets.json --project-name "$PROJECT_NAME"
+          rm -f /tmp/yourz-secrets.json
 
       - name: 发布网站
         working-directory: app
         run: wrangler pages deploy ./public --project-name "$PROJECT_NAME" --branch main
 
-      - name: 显示部署地址
-        run: echo "发布步骤已执行；请在 Cloudflare Pages 后台查看实际部署结果。";
+      - name: 显示部署提示
+        run: echo "发布命令已执行。请以 Cloudflare Pages 后台显示的最新部署状态为准。"
