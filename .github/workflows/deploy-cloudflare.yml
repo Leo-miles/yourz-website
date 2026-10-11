@@ -186,6 +186,51 @@ jobs:
           echo "DEPLOY_URL=$DEPLOY_URL" >> "$GITHUB_ENV"
           echo "本次部署地址：$DEPLOY_URL"
 
+      - name: 自动绑定正式域名 yourz.top
+        shell: bash
+        run: |
+          set -euo pipefail
+          DOMAIN="yourz.top"
+          LIST_HTTP="$(curl --silent --show-error --output /tmp/pages-domains.json --write-out '%{http_code}' -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$PROJECT_NAME/domains")"
+          if [ "$LIST_HTTP" != "200" ]; then
+            echo "::error::查询 Pages 自定义域名失败，HTTP $LIST_HTTP。"
+            node -e 'const b=require("/tmp/pages-domains.json");for(const e of b.errors||[])console.log(String(e.code)+": "+String(e.message||""));'
+            exit 1
+          fi
+          EXISTS="$(node -e '
+            const fs=require("node:fs");
+            const body=JSON.parse(fs.readFileSync("/tmp/pages-domains.json","utf8"));
+            const find=(value)=> {
+              if(Array.isArray(value)) return value.some(find);
+              if(value && typeof value==="object") {
+                if(value.name==="yourz.top" || value.domain==="yourz.top") return true;
+                return Object.values(value).some(find);
+              }
+              return false;
+            };
+            if(body.success!==true) process.exit(2);
+            process.stdout.write(find(body.result) ? "yes" : "no");
+          ')"
+          if [ "$EXISTS" = "yes" ]; then
+            echo "正式域名 yourz.top 已绑定到 Pages 项目。"
+          else
+            POST_HTTP="$(curl --silent --show-error --output /tmp/pages-domain-add.json --write-out '%{http_code}' -X POST -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" --data '{"name":"yourz.top"}' "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$PROJECT_NAME/domains")"
+            node - "$POST_HTTP" /tmp/pages-domain-add.json <<'NODE'
+            const fs=require("node:fs");
+            const http=process.argv[2];
+            const body=JSON.parse(fs.readFileSync(process.argv[3],"utf8"));
+            if ((http==="200" || http==="201") && body.success===true) {
+              console.log("Cloudflare Pages 已接受 yourz.top 域名绑定申请。");
+              console.log("域名验证状态："+String(body.result?.status || body.result?.verification_data?.status || "处理中"));
+              process.exit(0);
+            }
+            console.log("绑定申请未成功，HTTP "+http);
+            for(const e of body.errors||[]) console.log(String(e.code??"未知")+": "+String(e.message||""));
+            process.exit(1);
+            NODE
+          fi
+          rm -f /tmp/pages-domains.json /tmp/pages-domain-add.json
+
       - name: 线上真实写入测试并清理测试资料
         shell: bash
         env:
