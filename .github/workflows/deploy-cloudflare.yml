@@ -136,24 +136,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          wrangler pages project list --json > /tmp/pages-list.json
-          EXISTS="$(node -e '
-            let raw = "";
-            process.stdin.on("data", chunk => raw += chunk);
-            process.stdin.on("end", () => {
-              const find = value => {
-                if (Array.isArray(value)) return value.some(find);
-                if (value && typeof value === "object") {
-                  if (value.name === process.env.PROJECT_NAME) return true;
-                  return Object.values(value).some(find);
-                }
-                return false;
-              };
-              process.stdout.write(find(JSON.parse(raw)) ? "yes" : "no");
-            });
-          ' < /tmp/pages-list.json)"
-          if [ "$EXISTS" != "yes" ]; then
-            wrangler pages project create "$PROJECT_NAME" --production-branch main
+          set +e
+          CREATE_OUTPUT="$(wrangler pages project create "$PROJECT_NAME" --production-branch main 2>&1)"
+          CREATE_STATUS=$?
+          set -e
+          if [ "$CREATE_STATUS" -eq 0 ]; then
+            echo "$CREATE_OUTPUT"
+          elif printf '%s' "$CREATE_OUTPUT" | grep -Eqi 'already exists|8000002'; then
+            echo "网站项目已存在，继续部署。"
+          else
+            echo "$CREATE_OUTPUT"
+            exit "$CREATE_STATUS"
           fi
 
       - name: 写入数据库绑定配置
