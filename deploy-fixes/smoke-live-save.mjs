@@ -5,7 +5,7 @@ const username = process.env.BOOTSTRAP_ADMIN_USER;
 const password = process.env.BOOTSTRAP_ADMIN_PASSWORD;
 if (!base || !username || !password) throw new Error('Live smoke test is missing required deployment settings.');
 
-const api = (path) => new URL(path, base).toString();
+const api = path => new URL(path, base).toString();
 async function jsonFetch(path, { method = 'GET', cookie = '', csrf = '', body } = {}) {
   const headers = { Accept: 'application/json' };
   if (cookie) headers.Cookie = cookie;
@@ -19,18 +19,60 @@ async function jsonFetch(path, { method = 'GET', cookie = '', csrf = '', body } 
     body: body === undefined ? undefined : JSON.stringify(body),
     redirect: 'manual'
   });
-  const text = await response.text();
+  const raw = await response.text();
   let data;
-  try { data = JSON.parse(text); } catch { data = { error: text.slice(0, 300) }; }
+  try { data = JSON.parse(raw); } catch { data = { error: raw.slice(0, 300) }; }
   const cookieHeader = response.headers.get('set-cookie') || '';
   return { status: response.status, data, cookie: cookieHeader.match(/__Host-factory-session=[^;]+/)?.[0] || '' };
 }
 function need(ok, message) {
   if (!ok) throw new Error(message);
 }
+async function loadAdminState(cookie, reason = 'Could not load the administrator view') {
+  const current = await jsonFetch('/api/state', { cookie });
+  need(current.status === 200 && current.data.session?.role === 'admin', reason + ': HTTP ' + current.status + ' ' + JSON.stringify(current.data));
+  return current;
+}
+async function purgeRecord(cookie, currentState, record) {
+  let state = currentState;
+  let found = (state.data.state.factories || []).find(f => f.id === record.id);
+  if (!found) return await loadAdminState(cookie);
+  if (found.status !== 'deleted') {
+    const moved = await jsonFetch('/api/action', {
+      method: 'POST',
+      cookie,
+      csrf: state.data.session.csrf,
+      body: { baseRevision: state.data.state.revision, type: 'factory.delete', id: found.id, confirmName: found.name }
+    });
+    need(moved.status === 200, 'Could not move temporary test record to Trash: HTTP ' + moved.status + ' ' + JSON.stringify(moved.data));
+    state = await loadAdminState(cookie, 'Could not reload after moving the temporary test record to Trash');
+  }
+  found = (state.data.state.factories || []).find(f => f.id === record.id);
+  if (found) {
+    const purged = await jsonFetch('/api/action', {
+      method: 'POST',
+      cookie,
+      csrf: state.data.session.csrf,
+      body: { baseRevision: state.data.state.revision, type: 'factory.purge', id: found.id, confirmName: found.name }
+    });
+    need(purged.status === 200, 'Could not permanently remove temporary test record: HTTP ' + purged.status + ' ' + JSON.stringify(purged.data));
+  }
+  return await loadAdminState(cookie, 'Could not verify removal of temporary test record');
+}
+async function clearOldTestRecords(cookie, state) {
+  let current = state;
+  const oldRecords = (current.data.state.factories || []).filter(f => typeof f.name === 'string' && f.name.startsWith('ZZ_DEPLOY_SMOKE_'));
+  for (const record of oldRecords) {
+    current = await purgeRecord(cookie, current, record);
+    console.log('Removed an old temporary deployment-test record.');
+  }
+  return current;
+}
+
 const suffix = Math.random().toString(36).slice(2, 10);
 const testName = 'ZZ_DEPLOY_SMOKE_' + Date.now() + '_' + suffix;
 let cleanupWarnings = [];
+let adminCookie = '';
 
 try {
   const health = await jsonFetch('/healthz');
@@ -41,13 +83,11 @@ try {
   need(visitor.cookie.startsWith('__Host-factory-session='), 'Public entry did not issue a session cookie.');
   need(visitor.data.session?.role === 'editor', 'Public visitor did not receive edit access.');
 
-  const adminLogin = await jsonFetch('/auth/local/login', {
-    method: 'POST',
-    body: { username, password }
-  });
+  const adminLogin = await jsonFetch('/auth/local/login', { method: 'POST', body: { username, password } });
   need(adminLogin.status === 200 && adminLogin.cookie, 'Administrator cleanup login failed: HTTP ' + adminLogin.status + ' ' + JSON.stringify(adminLogin.data));
-  const adminState = await jsonFetch('/api/state', { cookie: adminLogin.cookie });
-  need(adminState.status === 200 && adminState.data.session?.role === 'admin', 'Administrator state check failed: HTTP ' + adminState.status + ' ' + JSON.stringify(adminState.data));
+  adminCookie = adminLogin.cookie;
+  let adminState = await loadAdminState(adminCookie, 'Administrator state check failed');
+  adminState = await clearOldTestRecords(adminCookie, adminState);
 
   const create = await jsonFetch('/api/action', {
     method: 'POST',
@@ -64,21 +104,9 @@ try {
   const testRecord = create.data.state.factories.find(f => f.name === testName);
   need(testRecord?.id, 'The saved test record has no ID.');
 
-  const latestAdminState = await jsonFetch('/api/state', { cookie: adminLogin.cookie });
-  need(latestAdminState.status === 200, 'Could not reload records before cleaning up the test record.');
-  const purge = await jsonFetch('/api/action', {
-    method: 'POST',
-    cookie: adminLogin.cookie,
-    csrf: latestAdminState.data.session.csrf,
-    body: {
-      baseRevision: latestAdminState.data.state.revision,
-      type: 'factory.purge',
-      id: testRecord.id,
-      confirmName: testName
-    }
-  });
-  need(purge.status === 200, 'Save test passed, but automatic cleanup failed: HTTP ' + purge.status + ' ' + JSON.stringify(purge.data));
-  need(!purge.data.state?.factories?.some(f => f.name === testName), 'The temporary test record is still present after cleanup.');
+  adminState = await loadAdminState(adminCookie, 'Could not reload records before cleaning up the test record');
+  adminState = await purgeRecord(adminCookie, adminState, testRecord);
+  need(!adminState.data.state.factories.some(f => f.name === testName), 'The temporary test record is still present after cleanup.');
 
   const stable = 'https://yourz-website.pages.dev';
   try {
@@ -89,26 +117,18 @@ try {
   }
   console.log('PASS: live public entry, live D1 save, live D1 reload, and automatic removal of the temporary test record.');
 } catch (error) {
-  // Best-effort cleanup in case the save committed but the response failed.
   try {
-    const login = await jsonFetch('/auth/local/login', {
-      method: 'POST',
-      body: { username, password }
-    });
-    if (login.status === 200 && login.cookie) {
-      const state = await jsonFetch('/api/state', { cookie: login.cookie });
-      const matches = (state.data?.state?.factories || []).filter(f => f.name === testName);
-      for (const record of matches) {
-        const purge = await jsonFetch('/api/action', {
-          method: 'POST',
-          cookie: login.cookie,
-          csrf: state.data.session?.csrf,
-          body: { baseRevision: state.data.state.revision, type: 'factory.purge', id: record.id, confirmName: testName }
-        });
-        if (purge.status !== 200) cleanupWarnings.push('Could not automatically remove the temporary test entry (HTTP ' + purge.status + ').');
-      }
+    if (!adminCookie) {
+      const login = await jsonFetch('/auth/local/login', { method: 'POST', body: { username, password } });
+      if (login.status === 200) adminCookie = login.cookie;
+    }
+    if (adminCookie) {
+      let current = await loadAdminState(adminCookie);
+      current = await clearOldTestRecords(adminCookie, current);
+      const stillPresent = current.data.state.factories.some(f => f.name === testName);
+      if (stillPresent) cleanupWarnings.push('The current temporary test entry still exists after cleanup.');
     } else {
-      cleanupWarnings.push('Could not authenticate cleanup; check for a record named ' + testName + ' if the save response was ambiguous.');
+      cleanupWarnings.push('Administrator cleanup login failed; no record should have been created before the save test succeeded.');
     }
   } catch (cleanupError) {
     cleanupWarnings.push('Cleanup check failed: ' + (cleanupError?.message || cleanupError));
