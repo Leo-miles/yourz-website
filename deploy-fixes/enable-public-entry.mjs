@@ -67,9 +67,9 @@ a = once(a,
 "async function backup(prefix='Supplier_Backup'){const data=await api('/api/backup');",
 'allow backup download in UI');
 a = a.replace("if(response.status===401){session=null;state=C.blank();renderLogin('Sign in again / 请重新登录');}", "if(response.status===401){session=null;state=C.blank();renderLogin('连接已中断，请点击重新连接。');}");
-const fs = a.indexOf("  if(form.id==='loginform'){"), fe = a.indexOf("  if(form.id==='adduserform'){", fs);
-if (fs < 0 || fe < 0 || fe <= fs) throw new Error('Patch target missing: sign-in submit');
-a = a.slice(0, fs) + a.slice(fe);
+const formStart = a.indexOf("  if(form.id==='loginform'){"), formEnd = a.indexOf("  if(form.id==='adduserform'){", formStart);
+if (formStart < 0 || formEnd < 0 || formEnd <= formStart) throw new Error('Patch target missing: sign-in submit');
+a = a.slice(0, formStart) + a.slice(formEnd);
 write('public/app.js', a);
 
 let t = read('test-worker.mjs');
