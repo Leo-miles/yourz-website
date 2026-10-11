@@ -1,4 +1,5 @@
 name: 发布工厂资料库到 Cloudflare
+# DNS verification follow-up: re-check the custom domain after DNS changes.
 
 on:
   push:
