@@ -215,19 +215,19 @@ jobs:
             echo "正式域名 yourz.top 已绑定到 Pages 项目。"
           else
             POST_HTTP="$(curl --silent --show-error --output /tmp/pages-domain-add.json --write-out '%{http_code}' -X POST -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" --data '{"name":"yourz.top"}' "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$PROJECT_NAME/domains")"
-            node - "$POST_HTTP" /tmp/pages-domain-add.json <<'NODE'
-            const fs=require("node:fs");
-            const http=process.argv[2];
-            const body=JSON.parse(fs.readFileSync(process.argv[3],"utf8"));
-            if ((http==="200" || http==="201") && body.success===true) {
-              console.log("Cloudflare Pages 已接受 yourz.top 域名绑定申请。");
-              console.log("域名验证状态："+String(body.result?.status || body.result?.verification_data?.status || "处理中"));
-              process.exit(0);
-            }
-            console.log("绑定申请未成功，HTTP "+http);
-            for(const e of body.errors||[]) console.log(String(e.code??"未知")+": "+String(e.message||""));
-            process.exit(1);
-            NODE
+            node -e '
+              const fs=require("node:fs");
+              const http=process.argv[1];
+              const body=JSON.parse(fs.readFileSync(process.argv[2],"utf8"));
+              if ((http==="200" || http==="201") && body.success===true) {
+                console.log("Cloudflare Pages 已接受 yourz.top 域名绑定申请。");
+                console.log("域名验证状态："+String(body.result?.status || body.result?.verification_data?.status || "处理中"));
+                process.exit(0);
+              }
+              console.log("绑定申请未成功，HTTP "+http);
+              for(const e of body.errors||[]) console.log(String(e.code??"未知")+": "+String(e.message||""));
+              process.exit(1);
+            ' "$POST_HTTP" /tmp/pages-domain-add.json
           fi
           rm -f /tmp/pages-domains.json /tmp/pages-domain-add.json
 
