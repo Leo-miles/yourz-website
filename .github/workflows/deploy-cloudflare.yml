@@ -190,13 +190,18 @@ jobs:
         shell: bash
         run: |
           set +e
-          echo "线上健康检查原始响应（仅用于定位后端错误）："
+          echo "本次部署地址健康检查："
           curl --silent --show-error --max-time 20 "$DEPLOY_URL/healthz?diag=1"
+          echo
+          echo "固定访问网址健康检查："
+          curl --silent --show-error --max-time 20 "https://yourz-website.pages.dev/healthz?diag=1"
           echo
           set -e
 
       - name: 线上真实写入测试并清理测试资料
         shell: bash
+        env:
+          DEPLOY_URL: https://yourz-website.pages.dev
         run: node deploy-fixes/smoke-live-save.mjs
 
       - name: 显示部署提示
