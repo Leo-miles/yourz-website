@@ -6,6 +6,15 @@ const write = (p, s) => fs.writeFileSync(path.join(root, p), s);
 const once = (s, a, b, name) => { if (!s.includes(a)) throw new Error('Patch target missing: '+name); return s.replace(a,b); };
 
 let h = read('src/handler.js');
+h = once(h,
+  "async function doEnsureSchema(db) {\n  await db.exec(SCHEMA);",
+  [
+    'async function doEnsureSchema(db) {',
+    '  for (const statement of SCHEMA.split(\';\').map(value => value.trim()).filter(Boolean)) {',
+    '    await db.prepare(statement).run();',
+    '  }'
+  ].join('\n'),
+  'execute D1 schema statements individually');
 const helpers = [
 "async function ensurePasswordlessMember(db) {",
 "  const userId = 'auto-shared';",
