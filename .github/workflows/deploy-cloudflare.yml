@@ -186,6 +186,15 @@ jobs:
           echo "DEPLOY_URL=$DEPLOY_URL" >> "$GITHUB_ENV"
           echo "本次部署地址：$DEPLOY_URL"
 
+      - name: 读取线上健康检查诊断
+        shell: bash
+        run: |
+          set +e
+          echo "线上健康检查原始响应（仅用于定位后端错误）："
+          curl --silent --show-error --max-time 20 "$DEPLOY_URL/healthz?diag=1"
+          echo
+          set -e
+
       - name: 线上真实写入测试并清理测试资料
         shell: bash
         run: node deploy-fixes/smoke-live-save.mjs
