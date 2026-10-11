@@ -13,7 +13,7 @@ const after = `  } catch (e) {
     if (!known) {
       const route = new URL(request.url).pathname;
       const errorName = e instanceof Error ? e.name : 'UnknownError';
-      const errorMessage = String(e?.message || e || 'Unknown error').replace(/[\\r\\n\\t]+/g, ' ').slice(0, 240);
+      const errorMessage = String(e?.message || e || 'Unknown error').replace(/[\r\n\t]+/g, ' ').slice(0, 240);
       console.error('[yourz] Unhandled server exception', {
         route, method: request.method, errorName, errorMessage,
         stack: String(e?.stack || '').slice(0, 1200)
