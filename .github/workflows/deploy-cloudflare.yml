@@ -6,6 +6,7 @@ on:
     paths:
       - "yourz-runtime.tar.xz"
       - ".github/workflows/deploy-cloudflare.yml"
+      - "deploy-fixes/**"
   workflow_dispatch:
 
 permissions:
@@ -85,6 +86,7 @@ jobs:
           echo "a67d49b9fe80fa901b113eb29541609d2c19c543e459ae758de3e2267ef9b15c  yourz-runtime.tar.xz" | sha256sum -c -
           mkdir -p app
           tar -xJf yourz-runtime.tar.xz -C app
+          node deploy-fixes/enable-admin-diagnostics.mjs app/src/handler.js
           cd app
           npm run check
           node test-worker.mjs
