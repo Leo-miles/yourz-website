@@ -53,7 +53,6 @@ h = once(h,
 "    return autoCookie ? responseWithCookie(request, 200, body, autoCookie) : jsonResponse(request, 200, body);"
 ].join('\n'), 'set visitor cookie');
 h = once(h, "    if (session.role !== 'admin') fail(403, 'Only administrators can download full backups / 只有管理员可下载完整备份');\n", '', 'allow backup download');
-h = h.replace("if (session?.role === 'admin') message += ' / 管理员诊断：' + errorName + ': ' + errorMessage;", "if (session) message += ' / 错误详情：' + errorName + ': ' + errorMessage;");
 write('src/handler.js', h);
 
 let a = read('public/app.js');

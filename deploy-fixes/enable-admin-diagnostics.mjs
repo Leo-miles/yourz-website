@@ -24,9 +24,6 @@ const after = `  } catch (e) {
         const session = env?.DB ? await currentSession(request, env.DB) : null;
         if (session?.role === 'admin') message += ' / 管理员诊断：' + errorName + ': ' + errorMessage;
       } catch { /* Keep the generic message if the session cannot be checked. */ }
-      if (route === '/healthz' && new URL(request.url).searchParams.get('diag') === '1') {
-        message += ' / 诊断：' + errorName + ': ' + errorMessage;
-      }
     }
     return jsonResponse(request, known ? e.status : 500, { error:message, code:known ? (e.code || 'error') : 'error' });
   }

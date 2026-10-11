@@ -105,6 +105,7 @@ try {
   need(testRecord?.id, 'The saved test record has no ID.');
 
   adminState = await loadAdminState(adminCookie, 'Could not reload records before cleaning up the test record');
+  need(adminState.data.state.factories.some(f => f.id === testRecord.id && f.name === testName), 'Saved test record was not found after reloading from D1.');
   adminState = await purgeRecord(adminCookie, adminState, testRecord);
   need(!adminState.data.state.factories.some(f => f.name === testName), 'The temporary test record is still present after cleanup.');
 
