@@ -231,6 +231,61 @@ jobs:
           fi
           rm -f /tmp/pages-domains.json /tmp/pages-domain-add.json
 
+      - name: 检查正式域名状态与 DNS 解析
+        shell: bash
+        run: |
+          set +e
+          DOMAIN_HTTP="$(curl --silent --show-error --output /tmp/pages-domain-status.json --write-out '%{http_code}' -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$PROJECT_NAME/domains/yourz.top")"
+          node -e '
+            const fs=require("node:fs");
+            const http=process.argv[1];
+            const b=JSON.parse(fs.readFileSync(process.argv[2],"utf8"));
+            console.log("Pages 域名接口 HTTP："+http);
+            if(b.success && b.result) {
+              console.log("Pages 域名状态："+String(b.result.status||"未知"));
+              console.log("验证状态："+String(b.result.validation_data?.status||b.result.verification_data?.status||"未知"));
+              if(b.result.validation_data?.error_message) console.log("验证提示："+String(b.result.validation_data.error_message).slice(0,300));
+              if(b.result.verification_data?.error_message) console.log("证书验证提示："+String(b.result.verification_data.error_message).slice(0,300));
+            } else for(const e of b.errors||[]) console.log("Pages 查询错误："+String(e.code??"未知")+" "+String(e.message||""));
+          ' "$DOMAIN_HTTP" /tmp/pages-domain-status.json
+
+          echo "检查公开 DNS（Google DNS）："
+          for TYPE in NS A CNAME; do
+            curl --silent --show-error --max-time 15 "https://dns.google/resolve?name=yourz.top&type=$TYPE" -o "/tmp/dns-$TYPE.json"
+            node -e '
+              const fs=require("node:fs");
+              const type=process.argv[1], f="/tmp/dns-"+type+".json";
+              try {
+                const b=JSON.parse(fs.readFileSync(f,"utf8"));
+                console.log(type+" DNS 状态："+String(b.Status));
+                for(const a of b.Answer||[]) console.log("  "+a.name+" -> "+a.data);
+              } catch(e) { console.log(type+" DNS 查询暂不可用："+e.message); }
+            ' "$TYPE"
+          done
+
+          echo "检查 Cloudflare 区域与 DNS 记录权限："
+          ZONE_HTTP="$(curl --silent --show-error --output /tmp/zone-yourz.json --write-out '%{http_code}' -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/zones?name=yourz.top")"
+          echo "区域查询 HTTP：$ZONE_HTTP"
+          if [ "$ZONE_HTTP" = "200" ]; then
+            ZONE_ID="$(node -e 'const b=require("/tmp/zone-yourz.json");process.stdout.write(b.result?.[0]?.id||"")')"
+            if [ -n "$ZONE_ID" ]; then
+              DNS_HTTP="$(curl --silent --show-error --output /tmp/dns-records-yourz.json --write-out '%{http_code}' -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records?name=yourz.top")"
+              echo "DNS 记录查询 HTTP：$DNS_HTTP"
+              if [ "$DNS_HTTP" = "200" ]; then
+                node -e 'const b=require("/tmp/dns-records-yourz.json");for(const r of b.result||[])console.log(r.type+" "+r.name+" -> "+r.content+" (proxied="+String(r.proxied)+")")'
+              else
+                node -e 'const b=require("/tmp/dns-records-yourz.json");for(const e of b.errors||[])console.log(String(e.code??"未知")+": "+String(e.message||""))'
+              fi
+            else
+              echo "Cloudflare 区域查询没有返回 zone ID。"
+            fi
+          else
+            node -e 'const b=require("/tmp/zone-yourz.json");for(const e of b.errors||[])console.log(String(e.code??"未知")+": "+String(e.message||""))'
+            echo "当前自动化令牌可能没有读取 DNS 区域的权限。"
+          fi
+          rm -f /tmp/pages-domain-status.json /tmp/dns-NS.json /tmp/dns-A.json /tmp/dns-CNAME.json /tmp/zone-yourz.json /tmp/dns-records-yourz.json
+          set -e
+
       - name: 线上真实写入测试并清理测试资料
         shell: bash
         env:
