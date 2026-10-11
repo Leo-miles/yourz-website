@@ -177,7 +177,18 @@ jobs:
 
       - name: 发布网站
         working-directory: app
-        run: wrangler pages deploy ./public --project-name "$PROJECT_NAME" --branch main
+        shell: bash
+        run: |
+          set -euo pipefail
+          wrangler pages deploy ./public --project-name "$PROJECT_NAME" --branch main 2>&1 | tee /tmp/yourz-deploy.log
+          DEPLOY_URL="$(grep -Eo 'https://[a-zA-Z0-9-]+\.yourz-website\.pages\.dev' /tmp/yourz-deploy.log | tail -n 1)"
+          test -n "$DEPLOY_URL" || { echo "::error::无法从部署日志读取本次部署地址。"; exit 1; }
+          echo "DEPLOY_URL=$DEPLOY_URL" >> "$GITHUB_ENV"
+          echo "本次部署地址：$DEPLOY_URL"
+
+      - name: 线上真实写入测试并清理测试资料
+        shell: bash
+        run: node deploy-fixes/smoke-live-save.mjs
 
       - name: 显示部署提示
-        run: echo "发布命令已执行。请以 Cloudflare Pages 后台显示的最新部署状态为准。"
+        run: echo "部署及线上数据库写入检查已执行。"
