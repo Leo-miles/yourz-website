@@ -6,6 +6,7 @@ const write = (p, s) => fs.writeFileSync(path.join(root, p), s);
 const once = (s, a, b, name) => { if (!s.includes(a)) throw new Error('Patch target missing: '+name); return s.replace(a,b); };
 
 let h = read('src/handler.js');
+h = once(h, 'const PBKDF2_ITERATIONS = 180_000;', 'const PBKDF2_ITERATIONS = 100_000;', 'use Cloudflare-supported PBKDF2 iteration count');
 h = once(h,
   "async function doEnsureSchema(db) {\n  await db.exec(SCHEMA);",
   [
