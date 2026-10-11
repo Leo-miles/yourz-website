@@ -1,48 +1,62 @@
-# yourz.top 工厂资料库（免购买服务器版本）
+# yourz.top 工厂资料库
 
-本项目的最新运行版本使用 **Cloudflare Pages + Pages Functions + D1**，不用购买或维护传统 Linux 服务器。网页静态文件和后端接口托管在 Cloudflare，D1 保存同事共享的业务数据。
+本项目采用 Cloudflare Pages、Pages Functions 和 D1 数据库，目标是不购买传统服务器，由 GitHub 自动发布网站。
 
-> 注意：Cloudflare Pages 版本已经在本地通过功能模拟测试，但尚未部署到 Cloudflare 生产环境。创建 Pages 项目、绑定 D1、设置管理员密码和配置域名仍需在对应控制台完成。免费额度有上限，不能把“本地测试通过”等同于“线上已验收”。
+目前程序已在本地通过功能模拟测试，**尚未部署到线上**。请不要把本地测试通过视为线上验收通过。
 
-## 本次部署包
+## 部署步骤
 
-从 ChatGPT 对话中下载 `yourz-cloudflare-deploy.tar.gz`，然后在此仓库页面选择 **Add file → Upload files**，把压缩包上传到仓库根目录并提交。请上传原始压缩包，不要重新压缩或改名。
+### 1. 在 GitHub 保存部署密钥
 
-## Cloudflare Pages 设置
+打开本仓库的「设置 → 密钥与变量 → 操作」，添加以下四条仓库密钥：
 
-1. 登录 https://dash.cloudflare.com/，进入 **Workers & Pages → Create application → Pages → Connect to Git**。
-2. 选择 GitHub 仓库 `Leo-miles/yourz-website`，生产分支为 `main`。
-3. Framework preset 选 **None**，Build command 填：
+| 名称 | 内容 |
+|---|---|
+| `CLOUDFLARE_API_TOKEN` | Cloudflare 中创建的部署专用 API 令牌 |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare 账户编号 |
+| `BOOTSTRAP_ADMIN_USER` | 初始管理员用户名，3–32 位英文小写字母、数字、点、下划线或连字符，例如 `admin` |
+| `BOOTSTRAP_ADMIN_PASSWORD` | 初始管理员密码，至少 16 位，建议使用随机强密码 |
 
-   `tar -xzf yourz-cloudflare-deploy.tar.gz -C .`
+不要把令牌或管理员密码写入代码，也不要发到聊天、工单或公开仓库中。前三、四项以外不需要额外创建密钥。
 
-4. Build output directory 填：
+### 2. 上传网站程序包
 
-   `public`
+下载程序包 `yourz-runtime.tar.xz`，在仓库首页选择「添加文件 → 上传文件」，把这个压缩包上传到**仓库根目录**，保持原文件名不变，然后提交到 `main` 分支。
 
-5. 创建 Pages 项目并等待首次构建。构建成功后访问 Cloudflare 分配的 `*.pages.dev` 地址，先不改域名 DNS。
+上传地址：https://github.com/Leo-miles/yourz-website/upload/main
 
-## 创建共享数据库
+### 3. 查看自动部署结果
 
-1. 在 Cloudflare 控制台打开 **Storage & databases → D1 SQL Database**，创建数据库，名称可用 `yourz-factory-db`。
-2. 进入 Pages 项目 **Settings → Functions → D1 database bindings**，添加绑定：变量名 `DB`，数据库选择刚刚创建的数据库。
-3. 在 Pages 项目 Settings → Variables and Secrets 的 Production 环境中添加：
-   - `BOOTSTRAP_ADMIN_USER`：管理员用户名，例如 `admin`。
-   - `BOOTSTRAP_ADMIN_PASSWORD`：设置为 Secret，使用至少 16 位随机强密码。
-4. 保存后重新部署。首次进入 `/healthz` 应返回成功，随后打开网站登录管理员账号。请勿把管理员密码、会话 Cookie 或任何密钥发到聊天或写入代码仓库。
-5. 管理员进入 Team / 团队，为同事分别创建账号并分配 Viewer（只读）或 Editor（可编辑）权限。不同账号使用的是同一个 D1 数据库。
+上传后，GitHub Actions 会自动进行完整性校验、程序检查、功能模拟测试，并创建或查找 Cloudflare D1 数据库与 Pages 项目，写入数据库绑定和初始管理员，然后发布网站。
+
+查看部署记录：https://github.com/Leo-miles/yourz-website/actions
+
+只有当最新一次任务明确显示成功，且 Cloudflare Pages 后台出现成功的部署记录，才算完成发布。成功后默认预览地址为：
+
+https://yourz-website.pages.dev
+
+如果任务失败，打开对应任务，查看第一个失败步骤的日志。日志不会需要你提供 API 令牌或管理员密码。
+
+## 初次登录与验证
+
+首次打开网站后，使用第 1 步自行设置的管理员用户名和密码登录。程序首次访问时会初始化数据库结构与空白资料库。请先用测试记录验证新增、编辑、权限、退出和备份等功能，再邀请同事使用。
+
+- 同事共用同一个 D1 数据库，但应使用各自的账号。
+- 管理员可创建同事账号并分配只读或可编辑权限。
+- 当前阶段使用临时本地账号登录，企业微信与小程序尚未接入。
+- 业务资料初始为空，不会自动导入旧版 Excel。
+- D1 免费额度有限，请定期导出并安全保存备份。
 
 ## 绑定 yourz.top
 
-确认 `*.pages.dev` 网站及共享功能测试通过后，再在 Pages 项目 **Custom domains → Set up a domain** 添加 `yourz.top`。
+先确认 `pages.dev` 地址、登录和多人共享资料测试成功，再在 Cloudflare Pages 项目中添加自定义域名 `yourz.top`。
 
-根域名需要先将 `yourz.top` 加为 Cloudflare zone 并把域名注册商处的 nameservers 改为 Cloudflare 指定的 nameservers。修改之前，若有企业邮箱或其他 DNS 记录，须先核对并搬入相应的 MX、TXT、CNAME 等记录，避免影响邮件或其他服务。不要照抄网上示例 IP；只使用 Cloudflare 控制台为你当前站点生成的指引。Cloudflare 验证通过后会自动配置 HTTPS。
+根域名需要先加入 Cloudflare 的域名区域，再按 Cloudflare 给出的指引将注册商处的域名服务器改为指定地址。**改之前先核对并迁移已有的企业邮箱及其他 DNS 记录**，避免影响邮件或现有服务。不要照抄网上示例 IP；只按自己控制台显示的指引操作。Cloudflare 完成域名验证后会配置 HTTPS。
 
-## 功能与数据
+## 运行说明
 
-- 当前阶段用临时本地账号登录，企业微信及小程序暂不接入。
-- 业务数据初始为空，不自动导入 `Supplier_Factory_Database.xlsx`。
-- 本地测试覆盖：首次管理员初始化、独立账号登录、不同账号读取共享状态、新建员工、只读/可编辑角色、冲突保护、备份及退出。
-- D1 免费计划有每日读写和存储额度限制；超过额度时当天的数据库查询可能失败。请定期使用系统备份，并安全保管离线备份。
-- Cloudflare 全球节点不等于中国大陆专属网络。正式让义乌、深圳同事长期使用前，要实测当地网络速度及稳定性。
-- 企业微信及小程序将在下一阶段单独接入，不会在本次部署中配置它们。
+- 部署工作流文件：`.github/workflows/deploy-cloudflare.yml`
+- 共享数据库名称：`yourz-factory-db`
+- 数据库绑定名称：`DB`
+- 页面项目名称：`yourz-website`
+- 计划将数据库主位置提示设置为亚太地区。Cloudflare 全球节点不代表中国大陆专属网络，正式让义乌和深圳同事长期使用前应实测当地速度与稳定性。
