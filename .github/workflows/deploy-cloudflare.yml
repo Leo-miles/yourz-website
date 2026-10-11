@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "yourz-runtime.tar.xz"
+      - ".github/workflows/deploy-cloudflare.yml"
   workflow_dispatch:
 
 permissions:
@@ -40,6 +41,42 @@ jobs:
           test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo "::error::缺少 CLOUDFLARE_ACCOUNT_ID，请在 GitHub 密钥设置中添加。"; exit 1; }
           test -n "$BOOTSTRAP_ADMIN_USER" || { echo "::error::缺少 BOOTSTRAP_ADMIN_USER，请先添加初始管理员用户名。"; exit 1; }
           test -n "$BOOTSTRAP_ADMIN_PASSWORD" || { echo "::error::缺少 BOOTSTRAP_ADMIN_PASSWORD，请先添加初始管理员密码。"; exit 1; }
+
+      - name: 自动诊断 Cloudflare 令牌和目标账户
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "正在检查令牌状态（不会输出令牌内容）……"
+          VERIFY_HTTP="$(curl --silent --show-error --output /tmp/cf-verify.json --write-out '%{http_code}' -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" https://api.cloudflare.com/client/v4/user/tokens/verify)"
+          node - "$VERIFY_HTTP" /tmp/cf-verify.json <<'NODE'
+          const fs = require('node:fs');
+          const http = process.argv[2];
+          const body = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
+          const active = http === '200' && body.success === true && body.result?.status === 'active';
+          console.log(active ? '令牌状态：有效（active）。' : '令牌状态：未通过验证。');
+          if (!active) {
+            console.log('HTTP 状态：' + http);
+            for (const e of (body.errors || [])) console.log('Cloudflare 错误：' + (e.code ?? '未知') + ' ' + String(e.message || '').replace(/[\\r\\n]/g, ' '));
+            process.exit(1);
+          }
+          NODE
+
+          echo "正在检查此令牌能否访问配置的 D1 账户……"
+          ACCOUNT_HTTP="$(curl --silent --show-error --output /tmp/cf-d1-access.json --write-out '%{http_code}' -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/d1/database?per_page=1")"
+          node - "$ACCOUNT_HTTP" /tmp/cf-d1-access.json <<'NODE'
+          const fs = require('node:fs');
+          const http = process.argv[2];
+          const body = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
+          const allowed = http === '200' && body.success === true;
+          console.log(allowed ? 'D1 账户访问：通过。' : 'D1 账户访问：失败。');
+          if (!allowed) {
+            console.log('HTTP 状态：' + http);
+            for (const e of (body.errors || [])) console.log('Cloudflare 错误：' + (e.code ?? '未知') + ' ' + String(e.message || '').replace(/[\\r\\n]/g, ' '));
+            console.log('排查方向：账户编号与令牌权限范围不匹配，或令牌没有目标账户的 D1 权限。');
+            process.exit(1);
+          }
+          NODE
+          rm -f /tmp/cf-verify.json /tmp/cf-d1-access.json
 
       - name: 校验并解压网站程序
         shell: bash
