@@ -231,6 +231,49 @@ jobs:
           fi
           rm -f /tmp/pages-domains.json /tmp/pages-domain-add.json
 
+      - name: 自动补齐 Pages 所需 CNAME 记录
+        shell: bash
+        run: |
+          set +e
+          DOMAIN_HTTP="$(curl --silent --show-error --output /tmp/pages-domain-for-dns.json --write-out '%{http_code}' -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$PROJECT_NAME/domains/yourz.top")"
+          ZONE_ID=""
+          if [ "$DOMAIN_HTTP" = "200" ]; then
+            ZONE_ID="$(node -e 'const b=require("/tmp/pages-domain-for-dns.json");process.stdout.write(String(b.result?.zone_tag||b.result?.zone_id||""))')"
+          fi
+          if [ -z "$ZONE_ID" ]; then
+            echo "未能从 Pages API 取得 DNS 区域编号，暂时无法自动添加 CNAME。"
+          else
+            REC_HTTP="$(curl --silent --show-error --output /tmp/yourz-dns-records.json --write-out '%{http_code}' -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records?name=yourz.top")"
+            if [ "$REC_HTTP" != "200" ]; then
+              echo "自动读取 DNS 记录失败，HTTP $REC_HTTP；可能需要 Zone DNS 权限。"
+              node -e 'const b=require("/tmp/yourz-dns-records.json");for(const e of b.errors||[])console.log(String(e.code??"未知")+": "+String(e.message||""))'
+            else
+              EXISTING="$(node -e '
+                const b=require("/tmp/yourz-dns-records.json");
+                const rs=b.result||[];
+                const same=rs.find(r=>r.type==="CNAME" && r.name==="yourz.top" && String(r.content).replace(/\.$/,"").toLowerCase()==="yourz-website.pages.dev");
+                const conflicts=rs.filter(r=>r.name==="yourz.top" && ["A","AAAA","CNAME"].includes(r.type));
+                if(same) process.stdout.write("correct");
+                else if(conflicts.length) process.stdout.write("conflict");
+                else process.stdout.write("missing");
+              ')"
+              if [ "$EXISTING" = "correct" ]; then
+                echo "正确的 CNAME 记录已经存在。"
+              elif [ "$EXISTING" = "conflict" ]; then
+                echo "根域名已有不同的 A/AAAA/CNAME 记录，为防止覆盖现有配置，本次没有修改。"
+              else
+                POST_HTTP="$(curl --silent --show-error --output /tmp/yourz-dns-create.json --write-out '%{http_code}' -X POST -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" --data '{"type":"CNAME","name":"yourz.top","content":"yourz-website.pages.dev","ttl":1,"proxied":false}' "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records")"
+                node -e '
+                  const fs=require("node:fs"), http=process.argv[1], b=JSON.parse(fs.readFileSync(process.argv[2],"utf8"));
+                  if((http==="200"||http==="201")&&b.success===true) console.log("已自动创建 DNS CNAME：yourz.top -> yourz-website.pages.dev（DNS Only，供 Pages 完成验证）。");
+                  else { console.log("无法自动创建 CNAME，HTTP "+http); for(const e of b.errors||[])console.log(String(e.code??"未知")+": "+String(e.message||"")); console.log("通常是当前 API 令牌缺少 Zone DNS Edit 权限。"); }
+                ' "$POST_HTTP" /tmp/yourz-dns-create.json
+              fi
+            fi
+          fi
+          rm -f /tmp/pages-domain-for-dns.json /tmp/yourz-dns-records.json /tmp/yourz-dns-create.json
+          set -e
+
       - name: 检查正式域名状态与 DNS 解析
         shell: bash
         run: |
