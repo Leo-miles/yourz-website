@@ -1,0 +1,152 @@
+name: 发布工厂资料库到 Cloudflare
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "yourz-runtime.tar.xz"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: 检查并发布网站
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      BOOTSTRAP_ADMIN_USER: ${{ secrets.BOOTSTRAP_ADMIN_USER }}
+      BOOTSTRAP_ADMIN_PASSWORD: ${{ secrets.BOOTSTRAP_ADMIN_PASSWORD }}
+      PROJECT_NAME: yourz-website
+      DATABASE_NAME: yourz-factory-db
+
+    steps:
+      - name: 取出仓库文件
+        uses: actions/checkout@v4
+
+      - name: 设置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: 检查必要的部署密钥
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo "::error::缺少 CLOUDFLARE_API_TOKEN，请在 GitHub 密钥设置中添加。"; exit 1; }
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo "::error::缺少 CLOUDFLARE_ACCOUNT_ID，请在 GitHub 密钥设置中添加。"; exit 1; }
+
+      - name: 校验并解压网站程序
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "a67d49b9fe80fa901b113eb29541609d2c19c543e459ae758de3e2267ef9b15c  yourz-runtime.tar.xz" | sha256sum -c -
+          mkdir -p app
+          tar -xJf yourz-runtime.tar.xz -C app
+          cd app
+          npm run check
+          node test-worker.mjs
+
+      - name: 安装 Cloudflare 部署工具
+        run: npm install --global wrangler@4
+
+      - name: 创建或查找共享数据库
+        shell: bash
+        run: |
+          set -euo pipefail
+          wrangler d1 list --json > /tmp/d1-list.json
+
+          find_db_id() {
+            node -e '
+              let raw = "";
+              process.stdin.on("data", chunk => raw += chunk);
+              process.stdin.on("end", () => {
+                const find = value => {
+                  if (Array.isArray(value)) {
+                    for (const item of value) { const found = find(item); if (found) return found; }
+                  } else if (value && typeof value === "object") {
+                    if (value.name === process.env.DATABASE_NAME || value.database_name === process.env.DATABASE_NAME) {
+                      const id = value.uuid || value.database_id || value.id;
+                      if (id) return id;
+                    }
+                    for (const item of Object.values(value)) { const found = find(item); if (found) return found; }
+                  }
+                  return "";
+                };
+                process.stdout.write(String(find(JSON.parse(raw)) || ""));
+              });
+            '
+          }
+
+          DB_ID="$(find_db_id < /tmp/d1-list.json)"
+          if [ -z "$DB_ID" ]; then
+            wrangler d1 create "$DATABASE_NAME" --location apac
+            wrangler d1 list --json > /tmp/d1-list.json
+            DB_ID="$(find_db_id < /tmp/d1-list.json)"
+          fi
+          test -n "$DB_ID" || { echo "::error::无法取得共享数据库编号，未继续发布。"; exit 1; }
+          echo "DB_ID=$DB_ID" >> "$GITHUB_ENV"
+          echo "已找到或创建共享数据库。"
+
+      - name: 创建或查找网站项目
+        shell: bash
+        run: |
+          set -euo pipefail
+          wrangler pages project list --json > /tmp/pages-list.json
+          EXISTS="$(node -e '
+            let raw = "";
+            process.stdin.on("data", chunk => raw += chunk);
+            process.stdin.on("end", () => {
+              const find = value => {
+                if (Array.isArray(value)) return value.some(find);
+                if (value && typeof value === "object") {
+                  if (value.name === process.env.PROJECT_NAME) return true;
+                  return Object.values(value).some(find);
+                }
+                return false;
+              };
+              process.stdout.write(find(JSON.parse(raw)) ? "yes" : "no");
+            });
+          ' < /tmp/pages-list.json)"
+          if [ "$EXISTS" != "yes" ]; then
+            wrangler pages project create "$PROJECT_NAME" --production-branch main
+          fi
+
+      - name: 写入数据库绑定配置
+        shell: bash
+        run: |
+          cat > app/wrangler.toml <<EOF
+          name = "yourz-website"
+          pages_build_output_dir = "./public"
+          compatibility_date = "2026-10-11"
+          compatibility_flags = ["nodejs_compat"]
+          send_metrics = false
+
+          [[d1_databases]]
+          binding = "DB"
+          database_name = "yourz-factory-db"
+          database_id = "$DB_ID"
+          EOF
+
+      - name: 设置初始管理员（如已配置）
+        working-directory: app
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "$BOOTSTRAP_ADMIN_USER" && -n "$BOOTSTRAP_ADMIN_PASSWORD" ]]; then
+            node -e 'const fs=require("node:fs");fs.writeFileSync("/tmp/yourz-secrets.json",JSON.stringify({BOOTSTRAP_ADMIN_USER:process.env.BOOTSTRAP_ADMIN_USER,BOOTSTRAP_ADMIN_PASSWORD:process.env.BOOTSTRAP_ADMIN_PASSWORD}));'
+            wrangler pages secret bulk /tmp/yourz-secrets.json --project-name "$PROJECT_NAME"
+            rm -f /tmp/yourz-secrets.json
+          else
+            echo "::warning::还没设置初始管理员。请在 GitHub 密钥中添加 BOOTSTRAP_ADMIN_USER 和 BOOTSTRAP_ADMIN_PASSWORD 后重新发布，设置前暂时无法登录。"
+          fi
+
+      - name: 发布网站
+        working-directory: app
+        run: wrangler pages deploy ./public --project-name "$PROJECT_NAME" --branch main
+
+      - name: 显示部署地址
+        run: echo "发布步骤已执行；请在 Cloudflare Pages 后台查看实际部署结果。";
