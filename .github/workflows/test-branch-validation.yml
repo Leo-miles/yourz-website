@@ -1,0 +1,54 @@
+name: Test branch validation (no deployment)
+
+on:
+  push:
+    branches:
+      - "test/cloud-drive-audit-v1"
+    paths:
+      - "yourz-runtime.tar.xz"
+      - "deploy-fixes/**"
+      - ".github/workflows/test-branch-validation.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate source package without Cloudflare access
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout test branch
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Verify and extract runtime package
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "a67d49b9fe80fa901b113eb29541609d2c19c543e459ae758de3e2267ef9b15c  yourz-runtime.tar.xz" | sha256sum -c -
+          mkdir -p app
+          tar -xJf yourz-runtime.tar.xz -C app
+
+      - name: Apply the same build-time patches as production
+        shell: bash
+        run: |
+          set -euo pipefail
+          node deploy-fixes/enable-admin-diagnostics.mjs app/src/handler.js
+          node deploy-fixes/enable-public-entry.mjs app
+          node deploy-fixes/add-yourz-favicon.mjs app
+
+      - name: Run static checks
+        working-directory: app
+        run: npm run check
+
+      - name: Run simulated worker tests
+        working-directory: app
+        run: node test-worker.mjs
+
+      # Deliberately no Cloudflare secrets, D1 writes, domain/DNS changes,
+      # or wrangler deploy command in this workflow.
