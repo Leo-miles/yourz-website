@@ -50,5 +50,18 @@ jobs:
         working-directory: app
         run: node test-worker.mjs
 
+      - name: Publish extracted source for review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-branch-source-review
+          path: |
+            app/src/**
+            app/public/**
+            app/package*.json
+            app/test-worker.mjs
+          if-no-files-found: warn
+          retention-days: 3
+
       # Deliberately no Cloudflare secrets, D1 writes, domain/DNS changes,
       # or wrangler deploy command in this workflow.
