@@ -145,7 +145,7 @@ jobs:
               return '';
             };
             process.stdout.write(walk(all));
-            NODE
+          NODE
           }
           DB_ID="$(find_db_id)"
           if [ -z "$DB_ID" ]; then
