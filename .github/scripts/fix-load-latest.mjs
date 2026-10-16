@@ -77,3 +77,6 @@ html = html.replace(scriptRef, replacementTag);
 if (!html.includes('app.js?' + version)) throw new Error('Could not verify the versioned app.js reference.');
 fs.writeFileSync(htmlFile, html);
 console.log('Browser cache bust applied: app.js?' + version);
+
+// Apply the safe supplier JSON import module to the shared application.
+await import('./add-safe-bulk-import.mjs');
