@@ -89,8 +89,8 @@ if (!handler.includes('YOURZ_PRODUCT_FILES_SCHEMA_V1')) {
     '    try {',
     '      await env.DB.batch([',
     "        env.DB.prepare('INSERT INTO uploaded_files(id,file_name,content_type,size,object_key,uploaded_by,uploaded_at) VALUES(?,?,?,?,?,?,?)').bind(id, fileName, contentType, size, objectKey, session.userId, uploadedAt),",
-    "        env.DB.prepare('INSERT INTO audit(at,user_id,action,target) VALUES(?,?,?,?)').bind(uploadedAt, session.userId, 'file.upload', fileName.slice(0, 250))",
-    "        env.DB.prepare('DELETE FROM file_upload_reservations WHERE id=?').bind(id)
+    "        env.DB.prepare('INSERT INTO audit(at,user_id,action,target) VALUES(?,?,?,?)').bind(uploadedAt, session.userId, 'file.upload', fileName.slice(0, 250)),",
+    "        env.DB.prepare('DELETE FROM file_upload_reservations WHERE id=?').bind(id)",
     '      ]);',
     '    } catch (error) {',
     '      try { await env.FILES.delete(objectKey); } catch { /* best-effort cleanup if metadata could not be recorded */ }',
