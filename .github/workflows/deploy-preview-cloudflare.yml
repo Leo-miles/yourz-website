@@ -245,7 +245,7 @@ jobs:
           console.log('Preview authentication smoke test passed; credentials omitted.');
           NODE
 
-          SESSION_COOKIE="$(grep -i '^set-cookie: __Host-factory-session=' /tmp/preview-login.headers | tail -n 1 | sed -E 's/^[Ss]et-[Cc]ookie:[[:space:]]*([^;]+).*/\\1/' | tr -d '\\r')"
+          SESSION_COOKIE="$(node -e 'const fs=require("node:fs");const h=fs.readFileSync("/tmp/preview-login.headers","utf8");const line=h.split(/\r?\n/).find(x=>/^set-cookie:\s*__Host-factory-session=/i.test(x));if(line)process.stdout.write(line.trim().split(";")[0]);')"
           test -n "$SESSION_COOKIE" || { echo "::error::Preview login did not return a session cookie."; exit 1; }
           STATE_HTTP="$(curl --silent --show-error --location --max-time 30 --output /tmp/preview-state.json --write-out '%{http_code}' -H "Cookie: $SESSION_COOKIE" "$DEPLOY_URL/api/state")"
           node - "$STATE_HTTP" /tmp/preview-state.json <<'NODE'
@@ -253,7 +253,7 @@ jobs:
           const http = process.argv[2];
           const body = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
           if (http !== '200' || !body.state || !Array.isArray(body.state.factories) || !Number.isInteger(body.state.revision)) {
-            console.error('Authenticated latest-state API smoke test failed; response body omitted for safety.');
+            console.error('Authenticated latest-state API smoke test failed. HTTP=' + http + ', error=' + String(body.error || body.code || 'invalid response').slice(0,160) + ', statePresent=' + Boolean(body.state));
             process.exit(1);
           }
           console.log('Authenticated latest-state API smoke test passed (revision=' + body.state.revision + ', factory rows=' + body.state.factories.length + ').');
