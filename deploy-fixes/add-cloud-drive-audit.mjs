@@ -172,7 +172,7 @@ const helpers = [
 "    else if(input.action==='rename'){if(file.deleted_at)fail(400,'请先恢复文件');const name=safeFilename(input.name);if(fileExtension(name)!==file.extension)fail(400,'重命名时不能更改文件格式');await db.prepare('UPDATE drive_files SET original_filename=?,updated_at=? WHERE id=?').bind(name,at,file.id).run();}",
 "    else if(input.action==='meta'){if(file.deleted_at)fail(400,'请先恢复文件');const category=validateCategory(input.category||file.category),factoryId=input.factoryId?String(input.factoryId):'';if(factoryId)await validateFactoryId(db,factoryId);const folderId=await validateFolderId(db,String(input.folderId||''));await db.prepare('UPDATE drive_files SET category=?,factory_id=?,folder_id=?,updated_at=? WHERE id=?').bind(category,factoryId||null,folderId,at,file.id).run();}",
 "    else fail(400,'未知文件操作');",
-"    await writeAuditQuietly(db,visitor,session,{method:'POST',action:'file.'+String(input.action),targetType:'file',targetId:file.id,targetName:file.original_filename,details:{category:file.category,factoryId:file.factory_id,folderId:file.folder_id}});return jsonResponse(request,200,{ok:true});",
+"    await writeAuditQuietly(db,visitor,session,{method:'POST',action:'file.'+String(input.action),targetType:'file',targetId:file.id,targetName:input.action==='rename'?String(input.name||'').slice(0,240):file.original_filename,details:{before:{filename:file.original_filename,category:file.category,factoryId:file.factory_id,folderId:file.folder_id,deletedAt:file.deleted_at||null},requested:{filename:input.name||null,category:input.category||null,factoryId:input.factoryId||null,folderId:input.folderId||null}}});return jsonResponse(request,200,{ok:true});",
 "  }",
 "  fail(404,'云盘操作不存在');",
 "}",
