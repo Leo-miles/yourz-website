@@ -211,7 +211,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          wrangler pages deploy ./public --project-name "$PROJECT_NAME" --branch "$PREVIEW_BRANCH" --config ./wrangler.toml
+          wrangler pages deploy ./public --project-name "$PROJECT_NAME" --branch "$PREVIEW_BRANCH"
           echo "Preview URL: https://$PROJECT_NAME.pages.dev"
           HTTP_CODE="$(curl --silent --show-error --location --max-time 30 --output /tmp/preview-health.txt --write-out '%{http_code}' "https://$PROJECT_NAME.pages.dev/healthz" || true)"
           if [ "$HTTP_CODE" != "200" ]; then
