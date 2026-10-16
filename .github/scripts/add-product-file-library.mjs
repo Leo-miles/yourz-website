@@ -20,6 +20,7 @@ if (!handler.includes('YOURZ_PRODUCT_FILES_SCHEMA_V1')) {
     '  /* YOURZ_PRODUCT_FILES_SCHEMA_V1 */',
     '  await db.prepare("CREATE TABLE IF NOT EXISTS uploaded_files (id TEXT PRIMARY KEY, file_name TEXT NOT NULL, content_type TEXT NOT NULL, size INTEGER NOT NULL, object_key TEXT NOT NULL UNIQUE, uploaded_by TEXT NOT NULL, uploaded_at TEXT NOT NULL)").run();',
     "  await db.prepare('CREATE INDEX IF NOT EXISTS idx_uploaded_files_uploaded_at ON uploaded_files(uploaded_at DESC)').run();",
+    '  await db.prepare("CREATE TABLE IF NOT EXISTS file_upload_reservations (id TEXT PRIMARY KEY, size INTEGER NOT NULL, created_at TEXT NOT NULL)").run();',
     schemaAnchor
   ].join('\n');
   handler = replaceOnce(handler, schemaAnchor, schemaPatch, 'D1 product-file metadata schema');
@@ -34,6 +35,7 @@ if (!handler.includes('YOURZ_PRODUCT_FILES_SCHEMA_V1')) {
     "  csv:'text/csv; charset=utf-8', txt:'text/plain; charset=utf-8', png:'image/png', jpg:'image/jpeg', jpeg:'image/jpeg', webp:'image/webp'",
     '};',
     'const MAX_PRODUCT_FILE_BYTES = 20 * 1024 * 1024;',
+    'const MAX_TOTAL_PRODUCT_FILE_BYTES = 9_000_000_000;',
     'function productFileName(value) {',
     "  let name = text(value, 500).replace(/[\\\\/]/g, '/').split('/').pop().trim();",
     "  name = name.replace(/[\\u0000-\\u001f\\u007f]/g, '').slice(0, 220);",
@@ -53,9 +55,9 @@ if (!handler.includes('YOURZ_PRODUCT_FILES_SCHEMA_V1')) {
     '    const pageRaw = Number.parseInt(url.searchParams.get("page") || "1", 10);',
     '    const page = Number.isFinite(pageRaw) ? Math.max(1, Math.min(100000, pageRaw)) : 1;',
     '    const pageSize = 50;',
-    "    const count = await env.DB.prepare('SELECT COUNT(*) AS total FROM uploaded_files').first();",
+    "    const count = await env.DB.prepare('SELECT COUNT(*) AS total, COALESCE(SUM(size),0) AS total_bytes FROM uploaded_files').first();",
     "    const result = await env.DB.prepare('SELECT id,file_name,content_type,size,uploaded_by,uploaded_at FROM uploaded_files ORDER BY uploaded_at DESC LIMIT ? OFFSET ?').bind(pageSize, (page - 1) * pageSize).all();",
-    '    return jsonResponse(request, 200, { files:result.results || [], total:Number(count?.total || 0), page, pageSize });',
+    '    return jsonResponse(request, 200, { files:result.results || [], total:Number(count?.total || 0), totalBytes:Number(count?.total_bytes || 0), storageLimitBytes:MAX_TOTAL_PRODUCT_FILE_BYTES, page, pageSize });',
     '  }',
     "  if (route === '/api/files' && method === 'POST') {",
     '    productFileWriteGuard(request, session);',
@@ -69,6 +71,8 @@ if (!handler.includes('YOURZ_PRODUCT_FILES_SCHEMA_V1')) {
     '    if (!request.body) fail(400, "The file is empty / 文件内容为空");',
     '    const id = token();',
     "    const objectKey = 'uploads/' + id;",
+    '    const reservation = await env.DB.prepare("INSERT INTO file_upload_reservations(id,size,created_at) SELECT ?,?,? WHERE (COALESCE((SELECT SUM(size) FROM uploaded_files),0) + COALESCE((SELECT SUM(size) FROM file_upload_reservations),0) + ?) <= ?").bind(id, size, stamp(), size, MAX_TOTAL_PRODUCT_FILE_BYTES).run();',
+    "    if (Number(reservation?.meta?.changes || 0) !== 1) fail(507, 'Shared file storage safety limit reached (9 GB). Delete unused files before uploading more. / 共享文件存储达到9GB安全上限，请删除不再需要的文件后再上传');",
     '    try {',
     '      let streamedSize = 0;',
     '      const guardedBody = request.body.pipeThrough(new TransformStream({',
@@ -77,6 +81,7 @@ if (!handler.includes('YOURZ_PRODUCT_FILES_SCHEMA_V1')) {
     '      }));',
     '      await env.FILES.put(objectKey, guardedBody, { httpMetadata:{ contentType }, customMetadata:{ fileId:id, uploadedBy:session.userId } });',
     '    } catch (error) {',
+    '      try { await env.DB.prepare("DELETE FROM file_upload_reservations WHERE id=?").bind(id).run(); } catch { /* best-effort reservation cleanup */ }',
     "      console.error('[yourz] product file upload failed', String(error?.message || error).slice(0, 240));",
     "      fail(502, 'Cloud file storage failed. No file record was added; please retry. / 云端文件保存失败，未添加文件记录，请重试');",
     '    }',
@@ -85,9 +90,11 @@ if (!handler.includes('YOURZ_PRODUCT_FILES_SCHEMA_V1')) {
     '      await env.DB.batch([',
     "        env.DB.prepare('INSERT INTO uploaded_files(id,file_name,content_type,size,object_key,uploaded_by,uploaded_at) VALUES(?,?,?,?,?,?,?)').bind(id, fileName, contentType, size, objectKey, session.userId, uploadedAt),",
     "        env.DB.prepare('INSERT INTO audit(at,user_id,action,target) VALUES(?,?,?,?)').bind(uploadedAt, session.userId, 'file.upload', fileName.slice(0, 250))",
+    "        env.DB.prepare('DELETE FROM file_upload_reservations WHERE id=?').bind(id)
     '      ]);',
     '    } catch (error) {',
     '      try { await env.FILES.delete(objectKey); } catch { /* best-effort cleanup if metadata could not be recorded */ }',
+    '      try { await env.DB.prepare("DELETE FROM file_upload_reservations WHERE id=?").bind(id).run(); } catch { /* best-effort reservation cleanup */ }',
     "      console.error('[yourz] product file metadata save failed', String(error?.message || error).slice(0, 240));",
     "      fail(500, 'The file was uploaded but its record could not be saved; please retry. / 文件上传后资料记录保存失败，请重试');",
     '    }',
@@ -141,7 +148,7 @@ let html = read('public/index.html');
 let app = read('public/app.js');
 if (!app.includes('YOURZ PRODUCT FILE LIBRARY V1')) {
   const stateAnchor = "let state=C.blank(),view='factories',selected='',query='',dirty=false,stale=false,lastUndo='',toastTimer;";
-  const statePatch = stateAnchor + "\n /* YOURZ PRODUCT FILE LIBRARY V1 */\n let productFileRows=[],productFileTotal=0,productFilePage=1,productFilePageSize=50,productFilesLoading=false,activeProductPreviewUrl='';";
+  const statePatch = stateAnchor + "\n /* YOURZ PRODUCT FILE LIBRARY V1 */\n let productFileRows=[],productFileTotal=0,productFilePage=1,productFilePageSize=50,productFilesLoading=false,activeProductPreviewUrl='',productFileTotalBytes=0,productFileStorageLimit=9000000000;";
   app = replaceOnce(app, stateAnchor, statePatch, 'product file UI state');
 
   const guideAnchor = '<p class="sub">One shared database for your team / 团队共用一个资料库</p></div></div><div class="panel guide">';
@@ -154,11 +161,11 @@ if (!app.includes('YOURZ PRODUCT FILE LIBRARY V1')) {
     ' /* YOURZ PRODUCT FILE LIBRARY V1 HELPERS */',
     ' const productExt=name=>String(name||"").split(".").pop().toLowerCase();',
     ' function productSize(n){const v=Number(n)||0;if(v<1024)return v+" B";if(v<1024*1024)return (v/1024).toFixed(1)+" KB";return (v/1024/1024).toFixed(2)+" MB";}',
-    ' function productFilesPanel(){return \'<section class="panel"><h2>Shared product files / 产品资料文件库</h2><p>Upload Word, Excel, PDF, PowerPoint, CSV, TXT and product images. Files are shared with teammates and stored in the cloud, not in this browser. Each file can be up to 20 MB. / 支持上传 Word、Excel、PDF、PPT、CSV、TXT 和产品图片；同事可共同查看，文件保存在云端而不是本地浏览器。单个文件最大20MB。</p>\'+(canEdit()?\'<div class="actions"><label class="small" for="productFileInput">Choose files / 选择文件</label><input id="productFileInput" type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt,.png,.jpg,.jpeg,.webp"><span id="productFileProgress" class="sub" role="status"></span></div>\':\'<p class="notice">View only / 仅查看：请联系管理员开通上传权限。</p>\')+\'<div id="productFileList"><p class="sub">Loading files / 正在载入文件…</p></div></section>\';}',
-    ' function renderProductFiles(){const box=document.getElementById("productFileList");if(!box)return;if(!productFileRows.length){box.innerHTML=productFilesLoading?\'<p class="sub">Loading files / 正在载入文件…</p>\':\'<div class="empty"><h3>No shared files / 暂无共享文件</h3><p>Choose a file above to upload the first document. / 从上方选择文件，上传第一份资料。</p></div>\';return;}',
+    ' function productFilesPanel(){return \'<section class="panel"><h2>Shared product files / 产品资料文件库</h2><p>Upload Word, Excel, PDF, PowerPoint, CSV, TXT and product images. Files are shared with teammates and stored in the cloud, not in this browser. Each file can be up to 20 MB; shared storage has a 9 GB safety cap. / 支持上传 Word、Excel、PDF、PPT、CSV、TXT 和产品图片；同事可共同查看，文件保存在云端而不是本地浏览器。单个文件最大20MB，共享存储设有9GB安全上限。</p>\'+(canEdit()?\'<div class="actions"><label class="small" for="productFileInput">Choose files / 选择文件</label><input id="productFileInput" type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt,.png,.jpg,.jpeg,.webp"><span id="productFileProgress" class="sub" role="status"></span></div>\':\'<p class="notice">View only / 仅查看：请联系管理员开通上传权限。</p>\')+\'<div id="productFileList"><p class="sub">Loading files / 正在载入文件…</p></div></section>\';}',
+    ' function renderProductFiles(){const box=document.getElementById("productFileList");if(!box)return;const storage=document.getElementById("productFileStorage");if(storage)storage.textContent="Storage used / 已用存储（约）: "+productSize(productFileTotalBytes)+" / "+productSize(productFileStorageLimit)+" (safety cap / 安全上限)";if(!productFileRows.length){box.innerHTML=productFilesLoading?\'<p class="sub">Loading files / 正在载入文件…</p>\':\'<div class="empty"><h3>No shared files / 暂无共享文件</h3><p>Choose a file above to upload the first document. / 从上方选择文件，上传第一份资料。</p></div>\';return;}',
     ' const rows=productFileRows.map(f=>[esc(f.file_name),productSize(f.size),esc(f.uploaded_by||""),esc(String(f.uploaded_at||"").replace("T"," ").replace(/\\.\\d+Z$/," UTC")),\'<button class="small" data-file-act="preview" data-file-id="\'+esc(f.id)+\'">Preview / 预览</button> <button class="small" data-file-act="download" data-file-id="\'+esc(f.id)+\'">Download / 下载</button> \'+(canEdit()?\'<button class="small danger" data-file-act="delete" data-file-id="\'+esc(f.id)+\'">Delete / 删除</button>\':\'\')]);',
     ' box.innerHTML=table(["File / 文件名","Size / 大小","Uploaded by / 上传人","Uploaded at / 上传时间","Actions / 操作"],rows)+(productFileTotal>productFilePageSize?\'<div class="actions"><button class="small" data-file-act="prev" \'+(productFilePage<=1?"disabled":"")+ \'>Previous / 上一页</button><span class="sub">Page / 页 \'+productFilePage+\' · \'+productFileTotal+\' files / 个文件</span><button class="small" data-file-act="next" \'+(productFilePage*productFilePageSize>=productFileTotal?"disabled":"")+ \'>Next / 下一页</button></div>\':\'<p class="sub">Showing / 显示 \'+productFileRows.length+\' of / 共 \'+productFileTotal+\' files / 个文件</p>\');}',
-    ' async function loadProductFiles(silent){if(productFilesLoading||!session)return;productFilesLoading=true;renderProductFiles();try{const data=await api("/api/files?page="+productFilePage);productFileRows=data.files||[];productFileTotal=Number(data.total)||0;productFilePage=Number(data.page)||1;productFilePageSize=Number(data.pageSize)||50;renderProductFiles();}catch(error){const box=document.getElementById("productFileList");if(box)box.innerHTML=\'<p class="notice error">\'+esc(error.message||String(error))+\'</p>\';if(!silent)toast(error.message||String(error));}finally{productFilesLoading=false;}}',
+    ' async function loadProductFiles(silent){if(productFilesLoading||!session)return;productFilesLoading=true;renderProductFiles();try{const data=await api("/api/files?page="+productFilePage);productFileRows=data.files||[];productFileTotal=Number(data.total)||0;productFileTotalBytes=Number(data.totalBytes)||0;productFileStorageLimit=Number(data.storageLimitBytes)||9000000000;productFilePage=Number(data.page)||1;productFilePageSize=Number(data.pageSize)||50;renderProductFiles();}catch(error){const box=document.getElementById("productFileList");if(box)box.innerHTML=\'<p class="notice error">\'+esc(error.message||String(error))+\'</p>\';if(!silent)toast(error.message||String(error));}finally{productFilesLoading=false;}}',
     ' async function uploadProductFiles(files){if(!canEdit())throw Error("Ask your administrator for upload access / 请联系管理员开通上传权限");if(stale||busy)throw Error("Load latest records and finish saving before uploading / 请先载入最新资料并等待保存完成");const progress=document.getElementById("productFileProgress");const input=document.getElementById("productFileInput");let done=0;const failed=[];productFilePage=1;if(progress)progress.textContent="Preparing / 准备上传 "+files.length+" file(s)…";for(const file of files){if(file.size<=0){failed.push(file.name+": empty / 文件为空");continue;}if(file.size>20*1024*1024){failed.push(file.name+": exceeds 20 MB / 超过20MB");continue;}if(progress)progress.textContent="Uploading / 正在上传 "+(done+1)+"/"+files.length+": "+file.name;try{const response=await fetch("/api/files?name="+encodeURIComponent(file.name),{method:"POST",credentials:"same-origin",cache:"no-store",headers:{"X-CSRF-Token":session?.csrf||"","Content-Type":file.type||"application/octet-stream","X-File-Size":String(file.size)},body:file});let data={};try{data=await response.json();}catch{}if(!response.ok)throw Error(data.error||("HTTP "+response.status));done++;}catch(error){failed.push(file.name+": "+(error.message||String(error)));}}if(input)input.value="";await loadProductFiles(true);if(progress)progress.textContent=failed.length?"Uploaded / 已上传 "+done+"; failed / 失败 "+failed.length:"Upload complete / 上传完成 "+done+" file(s)";if(failed.length)toast("Upload results / 上传结果：成功 "+done+"，失败 "+failed.length+"。"+failed.slice(0,2).join("；"));else toast("Upload complete / 上传完成："+done+" 个文件");}',
     ' function bindProductFileInput(){const input=document.getElementById("productFileInput");if(input)input.onchange=async event=>{const files=Array.from(event.target.files||[]);if(!files.length)return;try{await uploadProductFiles(files);}catch(error){toast(error.message||String(error));}};}',
     ' async function getProductFileBlob(id,download){const url="/api/files/"+encodeURIComponent(id)+"/content"+(download?"?download=1":"");const response=await fetch(url,{credentials:"same-origin",cache:"no-store"});if(!response.ok){let data={};try{data=await response.json();}catch{}throw Error(data.error||("HTTP "+response.status));}return response.blob();}',
