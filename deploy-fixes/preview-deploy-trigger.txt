@@ -21,3 +21,5 @@ Final isolated refresh API smoke test, no diagnostic dump: 2026-10-16T04:28Z
 Correct preview CI session-cookie parser and latest-state smoke check: 2026-10-16T04:30Z
 Use curl cookie jar for isolated preview session-to-state API smoke test: 2026-10-16T04:32Z
 Verify versioned app.js cache-busting in refresh-only test: 2026-10-16T06:24Z
+
+Test safe supplier import after missing-city normalization and resumable ID checks: 2026-10-16T07:00Z
