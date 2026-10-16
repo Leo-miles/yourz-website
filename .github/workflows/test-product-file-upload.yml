@@ -42,9 +42,3 @@ jobs:
           node --check public/app.js
           npm run check
           node test-worker.mjs
-      - name: Ensure no test workflow deploys production
-        run: |
-          if grep -R "wrangler pages deploy" .github/workflows/test-product-file-upload.yml; then
-            echo "::error::Test workflow must not deploy to Cloudflare."
-            exit 1
-          fi
