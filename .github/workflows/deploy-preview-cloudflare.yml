@@ -117,6 +117,7 @@ jobs:
           tar -xJf yourz-runtime.tar.xz -C app
           node deploy-fixes/enable-admin-diagnostics.mjs app/src/handler.js
           node deploy-fixes/add-yourz-favicon.mjs app
+          node deploy-fixes/inspect-refresh.mjs app
           node deploy-fixes/add-cloud-drive-audit.mjs app
           node deploy-fixes/add-cloud-drive-ui.mjs app
           cd app
