@@ -1,0 +1,36 @@
+name: Inspect runtime source on test branch
+
+on:
+  push:
+    branches:
+      - test/product-file-upload-v1
+
+permissions:
+  contents: write
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract runtime source for test-only inspection
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p app _inspection
+          tar -xJf yourz-runtime.tar.xz -C app
+          cp app/src/handler.js _inspection/handler.js
+          cp app/public/app.js _inspection/app.js
+          cp app/public/index.html _inspection/index.html
+          cp app/test-worker.mjs _inspection/test-worker.mjs
+          {
+            echo '# Test-only runtime source snapshot'
+            echo
+            echo 'Extracted from yourz-runtime.tar.xz in test/product-file-upload-v1.'
+            echo 'Do not merge this inspection directory into production.'
+          } > _inspection/README.md
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add _inspection
+          git commit -m "test: expose runtime source for safe file-upload implementation"
+          git push
