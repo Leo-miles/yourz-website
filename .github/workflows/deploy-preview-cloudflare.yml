@@ -119,6 +119,7 @@ jobs:
           node deploy-fixes/add-yourz-favicon.mjs app
           node deploy-fixes/add-cloud-drive-audit.mjs app
           node deploy-fixes/add-cloud-drive-ui.mjs app
+          node deploy-fixes/diagnose-preview-handler.mjs app
           node deploy-fixes/fix-load-latest.mjs app
           node --check app/public/app.js
           cd app

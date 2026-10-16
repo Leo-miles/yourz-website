@@ -11,3 +11,4 @@ Tail and health check same project alias: 2026-10-16T03:44Z
 Read-only refresh-module source diagnostic: 2026-10-16T04:09Z
 Capture unfiltered logs and health-check the exact preview deployment: 2026-10-16T04:14Z
 Health-check URL correction for exact preview deployment: 2026-10-16T04:16Z
+Temporary preview handler diagnostics: 2026-10-16T04:17Z
