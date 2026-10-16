@@ -223,10 +223,10 @@ jobs:
           echo "Preview deployment URL: $DEPLOY_URL"
           echo "Preview project alias: https://$PROJECT_NAME.pages.dev"
           # Tail this exact deployment, as Wrangler requires a positional deployment URL in CI.
-          timeout 12s wrangler pages deployment tail "$DEPLOY_URL" --project-name "$PROJECT_NAME" --environment production --status error --format json > /tmp/preview-tail.log 2>&1 &
+          timeout 12s wrangler pages deployment tail "$DEPLOY_URL" --project-name "$PROJECT_NAME" --environment production --format json > /tmp/preview-tail.log 2>&1 &
           TAIL_PID=$!
           sleep 2
-          HTTP_CODE="$(curl --silent --show-error --location --max-time 30 --output /tmp/preview-health.txt --write-out '%{http_code}' "https://$PROJECT_NAME.pages.dev/healthz" || true)"
+          HTTP_CODE="$(curl --silent --show-error --location --max-time 30 --output /tmp/preview-health.txt --write-out '%{http_code}' "https://$DEPLOY_URL/healthz" || true)"
           wait "$TAIL_PID" || true
           echo "Cloudflare live error-tail diagnostic (best-effort):"
           tail -n 100 /tmp/preview-tail.log 2>/dev/null || true
