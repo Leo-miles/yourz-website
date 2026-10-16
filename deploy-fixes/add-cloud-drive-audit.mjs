@@ -4,7 +4,38 @@ const root = process.argv[2] || 'app';
 const read = p => fs.readFileSync(root + '/' + p, 'utf8');
 const write = (p, s) => fs.writeFileSync(root + '/' + p, s);
 function once(source, before, after, label) {
-  if (!source.includes(before)) throw new Error('Patch target missing: ' + label);
+  if (!source.includes(before)) {
+    if (label === 'add visitor label, audit and drive routes') {
+      const stateRoute = "  if (route === '/api/state' && method === 'GET') {";
+      const cut = after.indexOf(stateRoute);
+      const current = source.indexOf(stateRoute);
+      if (cut < 0 || current < 0) throw new Error('Patch target missing and safe fallback could not locate /api/state.');
+      const hasVisitorRoute = source.includes("route === '/api/visitor-label'");
+      const hasAuditRoute = source.includes("route === '/api/audit'");
+      const hasDriveRoute = source.includes("route === '/api/files'");
+      if (!hasVisitorRoute && !hasAuditRoute && !hasDriveRoute) {
+        const routeHandlers = after.slice(0, cut);
+        source = source.slice(0, current) + routeHandlers + source.slice(current);
+      } else if (!(hasVisitorRoute && hasAuditRoute && hasDriveRoute)) {
+        throw new Error('Partial visitor/audit/drive routes already exist; refusing to duplicate handlers.');
+      }
+      const stateStart = source.indexOf(stateRoute);
+      const bodyStart = source.indexOf('const body = {', stateStart);
+      if (bodyStart >= 0) {
+        const lineStart = source.lastIndexOf('\\n', bodyStart) + 1;
+        const lineEnd = source.indexOf('\\n', bodyStart);
+        const end = lineEnd < 0 ? source.length : lineEnd;
+        const bodyLine = source.slice(lineStart, end);
+        if (bodyLine.includes('const body = {') && bodyLine.includes('};') && !bodyLine.includes('visitor:')) {
+          const patchedLine = bodyLine.replace(/};\\s*$/, ', visitor:visitor?{id:visitor.visitorId,label:visitor.deviceLabel}:null };');
+          source = source.slice(0, lineStart) + patchedLine + source.slice(end);
+        }
+      }
+      console.log('Inserted visitor/audit/drive routes using guarded state-route fallback.');
+      return source;
+    }
+    throw new Error('Patch target missing: ' + label);
+  }
   return source.replace(before, after);
 }
 const tick = String.fromCharCode(96);
