@@ -213,7 +213,7 @@ jobs:
           set -euo pipefail
           DEPLOY_OUTPUT="$(wrangler pages deploy ./public --project-name "$PROJECT_NAME" --branch "$PREVIEW_BRANCH" 2>&1)"
           printf '%s\\n' "$DEPLOY_OUTPUT"
-          DEPLOY_URL="$(printf '%s\\n' "$DEPLOY_OUTPUT" | grep -Eo 'https://[A-Za-z0-9.-]+\\.yourz-website-preview\\.pages\\.dev|https://[A-Za-z0-9.-]+\\.pages\\.dev' | tail -n 1)"
+          DEPLOY_URL="$(printf '%s\\n' "$DEPLOY_OUTPUT" | grep -Eo 'https://[A-Za-z0-9.-]+[.]pages[.]dev' | tail -n 1)"
           if [ -z "$DEPLOY_URL" ]; then
             echo "::error::Could not resolve the deployed preview URL from Wrangler output. No production domain or DNS was changed."
             exit 1
