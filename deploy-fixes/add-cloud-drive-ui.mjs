@@ -46,7 +46,7 @@ const driveCode = [
 "  const listing=files.length?'<div class=tablewrap><table><thead><tr><th>文件 / File</th><th>分类 / Category</th><th>关联工厂 / Factory</th><th>文件夹 / Folder</th><th>上传信息 / Uploaded</th><th>操作 / Actions</th></tr></thead><tbody>'+rows+'</tbody></table></div>':'<div class=empty><h2>'+(driveError?'云盘暂不可用 / Drive unavailable':driveQuery?'没有匹配文件 / No matching files':driveTrash?'回收站为空 / Trash is empty':'暂无文件 / No files yet')+'</h2><p>'+esc(driveError||'上传的文件会保存在云端，团队可从其他电脑访问。')+'</p></div>';",
 "  const pageCount=Math.max(1,Math.ceil(total/drivePageSize));",
 "  return '<div class=heading><div><h1>'+(driveTrash?'云盘回收站 / Drive trash':'YOURZ 云盘 / Document center')+'</h1><p class=sub>云端统一存储 · 多电脑共享 · 上传与操作留痕 / Cloud storage, team access and audit history</p></div><div class=actions><button class=primary data-act=drive-upload>上传文件 / Upload</button><button data-act=drive-folder-new>新建文件夹 / New folder</button><button data-act=drive-toggle-trash>'+(driveTrash?'返回文件 / All files':'回收站 / Trash')+'</button></div></div>' +",
-"  '<div class=drive-note>Office 在线预览通过 Microsoft Office Online Viewer 渲染。点击预览时，系统生成仅可读取、15分钟后失效的临时链接；预览服务可在有效期内读取该文件。敏感文件请先下载，或不要使用 Office 在线预览。PDF 和常见图片由本网站直接预览。</div>' +",
+"  '<div class=drive-note>访问留痕说明：网站会记录匿名访客编号、IP 地址及其大致地区、浏览器/系统信息，以及访问和文件操作记录；地区是 IP 推算结果，并非 GPS。 / Audit notice: visitor ID, IP and approximate IP-based location, browser/system information, and page/file actions are recorded.</div><div class=drive-note>Office 在线预览通过 Microsoft Office Online Viewer 渲染。点击预览时，系统生成仅可读取、15分钟后失效的临时链接；预览服务可在有效期内读取该文件。敏感文件请先下载，或不要使用 Office 在线预览。PDF 和常见图片由本网站直接预览。</div>' +",
 "  (driveError?'<div class=notice error>'+esc(driveError)+'</div>':'') +",
 "  '<div class=panel><div class=drive-toolbar><input id=drivesearch type=search placeholder=\"输入文件名，按回车搜索 / Search filename\" value=\"'+esc(driveQuery)+'\"><select id=drivecategory aria-label=分类>'+driveOption('all','全部分类 / All categories',driveCategory)+cats+'</select><select id=drivefactory aria-label=工厂>'+driveOption('all','全部工厂 / All factories',driveFactory)+factories+'</select><select id=drivefolder aria-label=文件夹>'+driveOption('all','全部文件夹 / All folders',driveFolder)+driveOption('root','根目录 / Root',driveFolder)+folders+'</select></div>' +",
 "  '<div class=sub>支持 DOC、DOCX、XLS、XLSX、PPT、PPTX、PDF、CSV、TXT 和常见图片；单个文件目前限25MB。/ Supports Office, PDF, text and common images; 25MB maximum per file.</div></div>' + listing +",
@@ -97,7 +97,7 @@ a=once(a,
   "document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{view=b.dataset.view;selected='';query='';render();recordClientAudit('page.view','page',view,b.textContent||view);if(view==='team')loadTeam().catch(e=>toast(e.message));if(view==='drive')loadDrive();});",
   'wire navigation visits');
 const eventInsert = [
-" main.addEventListener('keydown',e=>{if(e.target?.id==='drivesearch'&&e.key==='Enter'){e.preventDefault();driveQuery=e.target.value.trim();drivePage=1;loadDrive();}});",
+" main.addEventListener('keydown',e=>{if(e.target?.id==='search'&&e.key==='Enter'){recordClientAudit('factory.search','factory-search','',e.target.value.trim());}if(e.target?.id==='drivesearch'&&e.key==='Enter'){e.preventDefault();driveQuery=e.target.value.trim();drivePage=1;loadDrive();}});",
 " main.addEventListener('change',async e=>{",
 "  try{if(e.target?.id==='driveupload'){const files=e.target.files;e.target.value='';await uploadDriveFiles(files);}",
 "  else if(e.target?.id==='drivecategory'){driveCategory=e.target.value;drivePage=1;await loadDrive();}",
