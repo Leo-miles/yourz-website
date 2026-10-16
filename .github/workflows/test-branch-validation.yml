@@ -11,6 +11,7 @@ on:
       - ".github/workflows/deploy-cloudflare.yml"
       - ".github/workflows/test-branch-validation.yml"
       - ".github/workflows/deploy-preview-cloudflare.yml"
+      - ".github/workflows/deploy-refresh-only.yml"
 
 permissions:
   contents: read
