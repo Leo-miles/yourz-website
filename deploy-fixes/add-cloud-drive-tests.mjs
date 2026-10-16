@@ -75,9 +75,9 @@ const tests = [
 "assert.equal(movedToTrash.status,200,await movedToTrash.clone().text());",
 "const trashList=await request('/api/files?page=1&pageSize=10&trash=1',{cookie:driveCookie});assert.ok((await trashList.json()).files.some(f=>f.id===uploadedData.id));",
 "const restoredFile=await request('/api/files/action',{method:'POST',body:{action:'restore',id:uploadedData.id},cookie:driveCookie,csrf:driveCsrf});assert.equal(restoredFile.status,200,await restoredFile.clone().text());",
-"const setLabel=await request('/api/visitor-label',{method:'POST',body:{label:'Test workstation'},cookie:driveCookie,csrf:driveCsrf});assert.equal(setLabel.status,200,await setLabel.clone().text());
-const exportAudit=await request('/api/audit',{method:'POST',body:{action:'factory.export',targetType:'factory',targetId:'F000001',targetName:'Test factory'},cookie:driveCookie,csrf:driveCsrf});assert.equal(exportAudit.status,200,await exportAudit.clone().text());
-const backupDownload=await request('/api/backup',{cookie:driveCookie});assert.equal(backupDownload.status,200,await backupDownload.clone().text());",
+"const setLabel=await request('/api/visitor-label',{method:'POST',body:{label:'Test workstation'},cookie:driveCookie,csrf:driveCsrf});assert.equal(setLabel.status,200,await setLabel.clone().text());",
+"const exportAudit=await request('/api/audit',{method:'POST',body:{action:'factory.export',targetType:'factory',targetId:'F000001',targetName:'Test factory'},cookie:driveCookie,csrf:driveCsrf});assert.equal(exportAudit.status,200,await exportAudit.clone().text());",
+"const backupDownload=await request('/api/backup',{cookie:driveCookie});assert.equal(backupDownload.status,200,await backupDownload.clone().text());"
 "const labeledVisitor=await DB.prepare('SELECT visitor_id,device_label FROM visitors WHERE device_label=?').bind('Test workstation').first();assert.ok(labeledVisitor?.visitor_id);",
 "const auditActions=(await DB.prepare('SELECT action FROM audit_events').all()).results.map(x=>x.action);",
 "for(const action of ['file.upload','file.preview.office','file.replace','file.version.restore','file.delete','file.restore','device.label','factory.export','backup.download'])assert.ok(auditActions.includes(action),'missing audit event '+action);",
