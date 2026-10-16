@@ -13,12 +13,16 @@
 
 ## 上线前必须完成
 
-1. 在 Cloudflare R2 中创建私有 bucket，例如 `yourz-documents`。
-2. 在 Cloudflare Pages 项目 `yourz-website` 中打开 Settings → Bindings → Add → R2 bucket，变量名必须设为 `FILES`，并选择上述 bucket。Cloudflare 官方说明：绑定必须先有 bucket，再添加绑定；部署后才生效。生产环境与 Preview 环境的绑定可分开配置。参考：https://developers.cloudflare.com/pages/functions/bindings/
-3. 预览环境不要绑定生产文件桶；如果以后做真正的 Pages 测试部署，应另建独立测试 bucket，防止测试文件污染生产数据。
-4. 先做一次测试部署，并用真实的 DOCX、XLSX、PPTX、PDF 文件验证中文文件名、Office Viewer、下载、版本恢复与回收站。
+1. 在 Cloudflare R2 中创建私有 bucket，例如 `yourz-documents-preview`（预览环境专用），生产环境以后另行设置独立 bucket。
+2. 先建立完全独立的预览项目/环境，使用独立 D1 测试数据库与独立 R2 bucket；严禁把预览绑定到生产 D1 或生产文件桶。
+3. 在 Cloudflare Pages 预览项目中打开 Settings → Bindings → Add → R2 bucket，变量名必须设为 `FILES`，并选择预览 bucket。Cloudflare 官方说明：绑定必须先有 bucket，再添加绑定；部署后才生效。生产和 Preview 的绑定可以分别设置。参考：https://developers.cloudflare.com/pages/functions/bindings/
+4. 先做一次预览部署，并用真实但不敏感的 DOCX、XLSX、PPTX、PDF 文件验证中文文件名、Office Viewer、下载、版本恢复与回收站。
 5. 核对访问/操作日志。当前有日志写入能力，但日志查看页的开放范围按需求暂缓，之后再由项目所有者确定。
 6. 核对备份策略、日志保留期和访问留痕告知。访客 ID 依赖浏览器 Cookie；删除 Cookie、换浏览器或使用 VPN 都会影响设备关联；IP 地区为估算而非 GPS。
+
+## 部署安全警告
+
+现有 `.github/workflows/deploy-cloudflare.yml` 是正式部署流程：它使用项目名 `yourz-website`、把部署分支固定为 `main`，并自动处理正式域名 `yourz.top`。**不要用它来测试预览，也不要直接合并本 PR**；否则可能触发正式环境发布。应先建立不绑定正式域名的专用预览流程，并检查预览数据库/文件桶与生产环境完全隔离。
 
 ## 免费额度与停止条件
 
@@ -38,5 +42,6 @@ Microsoft Office Online Viewer 需要从源 URL 获取原文件。当前设计�
 - Existing Worker/D1 simulation: passed
 - Mocked R2 upload/list, temporary Office source token, replace/version restore, trash restore and audit event assertions: passed
 - Real Cloudflare R2 binding: not configured
-- Real Microsoft Office Viewer: not tested against production files
+- Real Microsoft Office Viewer: not tested against real files
+- Dedicated isolated preview project/DB/R2: not created
 - Production deployment: not performed
