@@ -232,6 +232,34 @@ jobs:
           fi
           echo "Read-only health check passed."
 
+          INDEX_HTTP="$(curl --silent --show-error --location --max-time 30 --output /tmp/preview-index.html --write-out '%{http_code}' -H 'Cache-Control: no-cache' "$DEPLOY_URL/" || true)"
+          ASSET_HTTP="$(curl --silent --show-error --location --max-time 30 --output /tmp/preview-app.js --write-out '%{http_code}' -H 'Cache-Control: no-cache' "$DEPLOY_URL/app.js?v=yourz-refresh-20261016-2" || true)"
+          node - "$INDEX_HTTP" /tmp/preview-index.html "$ASSET_HTTP" /tmp/preview-app.js <<'NODE'
+          const fs = require('node:fs');
+          const indexStatus = process.argv[2];
+          const html = fs.readFileSync(process.argv[3], 'utf8');
+          const assetStatus = process.argv[4];
+          const source = fs.readFileSync(process.argv[5], 'utf8');
+          const markers = [
+            'app.js?v=yourz-refresh-20261016-2'
+          ];
+          const refreshMarkers = [
+            "cache:'no-store'",
+            'Loaded latest data / 已载入最新资料',
+            "button.setAttribute('aria-busy','true')",
+            'Loading latest… / 正在载入…'
+          ];
+          if (indexStatus !== '200' || !markers.every(item => html.includes(item))) {
+            console.error('Preview HTML does not reference the versioned app.js asset.');
+            process.exit(1);
+          }
+          if (assetStatus !== '200' || !refreshMarkers.every(item => source.includes(item))) {
+            console.error('Preview app.js does not include the tested refresh module.');
+            process.exit(1);
+          }
+          console.log('Preview HTML cache-bust and refresh-module asset verification passed.');
+          NODE
+
           LOGIN_BODY="$(node -e 'process.stdout.write(JSON.stringify({username:process.env.PREVIEW_ADMIN_USER,password:process.env.PREVIEW_BOOTSTRAP_ADMIN_PASSWORD}))')"
           LOGIN_HTTP="$(curl --silent --show-error --location --max-time 30 --cookie-jar /tmp/preview-cookies.txt --output /tmp/preview-login.json --write-out '%{http_code}' -X POST -H "Origin: $DEPLOY_URL" -H 'Content-Type: application/json' --data "$LOGIN_BODY" "$DEPLOY_URL/auth/local/login")"
           node - "$LOGIN_HTTP" /tmp/preview-login.json <<'NODE'
@@ -260,4 +288,4 @@ jobs:
 
       - name: Cleanup temporary secret file
         if: always()
-        run: rm -f /tmp/yourz-preview-secrets.json /tmp/d1-list.json /tmp/preview-health.txt /tmp/preview-tail.log /tmp/preview-cookies.txt /tmp/preview-login.json /tmp/preview-state.json
+        run: rm -f /tmp/yourz-preview-secrets.json /tmp/d1-list.json /tmp/preview-health.txt /tmp/preview-tail.log /tmp/preview-cookies.txt /tmp/preview-login.json /tmp/preview-state.json /tmp/preview-index.html /tmp/preview-app.js
