@@ -16,3 +16,4 @@ Log D1 schema failure details in isolated preview: 2026-10-16T04:20Z
 Retry schema diagnostics after newline fix: 2026-10-16T04:21Z
 Expose short non-sensitive error only in isolated preview response for diagnosis: 2026-10-16T04:22Z
 Execute preview D1 schema statements individually, then recheck refresh: 2026-10-16T04:24Z
+Apply Workers PBKDF2 compatibility in preview without changing auth flow: 2026-10-16T04:26Z
