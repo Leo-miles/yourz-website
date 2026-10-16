@@ -1,0 +1,72 @@
+name: Read-only Cloudflare R2 verification
+
+on:
+  push:
+    branches:
+      - test/cloudflare-r2-readonly-check
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify Cloudflare token and existing R2 bucket (read-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Verify required repository secrets are present
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo "::error::CLOUDFLARE_API_TOKEN is not configured for this repository."; exit 1; }
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo "::error::CLOUDFLARE_ACCOUNT_ID is not configured for this repository."; exit 1; }
+          echo "Required Cloudflare secrets are configured (values are not displayed)."
+
+      - name: Verify token is active (read-only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          HTTP_CODE="$(curl --silent --show-error --max-time 20 --output /tmp/cf-token-verify.json --write-out '%{http_code}' -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" https://api.cloudflare.com/client/v4/user/tokens/verify)"
+          node - "$HTTP_CODE" /tmp/cf-token-verify.json <<'NODE'
+          const fs = require('node:fs');
+          const status = process.argv[2];
+          let data = {};
+          try { data = JSON.parse(fs.readFileSync(process.argv[3], 'utf8')); } catch {}
+          if (status !== '200' || data.success !== true || data.result?.status !== 'active') {
+            console.error('Cloudflare token verification failed. No resource was changed.');
+            process.exit(1);
+          }
+          console.log('Cloudflare token is active.');
+          NODE
+
+      - name: Check whether the expected R2 bucket exists (read-only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          HTTP_CODE="$(curl --silent --show-error --max-time 20 --output /tmp/cf-r2-buckets.json --write-out '%{http_code}' -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/r2/buckets?name_contains=yourz-product-files&per_page=1000")"
+          node - "$HTTP_CODE" /tmp/cf-r2-buckets.json <<'NODE'
+          const fs = require('node:fs');
+          const status = process.argv[2];
+          let data = {};
+          try { data = JSON.parse(fs.readFileSync(process.argv[3], 'utf8')); } catch {}
+          if (status !== '200' || data.success !== true) {
+            console.error('Could not list R2 buckets (HTTP ' + status + '). The token may lack R2 read permission, or the account ID may be incorrect. No resource was changed.');
+            process.exit(1);
+          }
+          const buckets = data.result?.buckets || [];
+          const target = buckets.find(bucket => bucket.name === 'yourz-product-files');
+          if (target) {
+            console.log('R2_BUCKET_RESULT=FOUND');
+            console.log('Existing bucket yourz-product-files was found; no changes were made.');
+          } else {
+            console.log('R2_BUCKET_RESULT=NOT_FOUND');
+            console.log('No bucket named exactly yourz-product-files was found in this account. No bucket was created.');
+          }
+          NODE
+
+      - name: Clean up temporary verification data
+        if: always()
+        run: rm -f /tmp/cf-token-verify.json /tmp/cf-r2-buckets.json
