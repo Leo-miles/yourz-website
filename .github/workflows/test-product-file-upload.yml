@@ -1,0 +1,50 @@
+name: Test product file upload implementation
+
+on:
+  push:
+    branches:
+      - test/product-file-upload-v1
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check patch scripts
+        run: |
+          node --check .github/scripts/add-safe-bulk-import.mjs
+          node --check .github/scripts/add-product-file-library.mjs
+      - name: Extract production runtime into test workspace
+        run: |
+          mkdir -p app
+          tar -xJf yourz-runtime.tar.xz -C app
+      - name: Apply the same base compatibility patches as production
+        run: |
+          node deploy-fixes/enable-admin-diagnostics.mjs app/src/handler.js
+          node deploy-fixes/enable-public-entry.mjs app
+          node deploy-fixes/add-yourz-favicon.mjs app
+      - name: Install local preview libraries
+        working-directory: app
+        run: npm install --no-save --package-lock=false xlsx@0.18.5 jszip@3.10.1
+      - name: Apply file library changes on test workspace only
+        run: node .github/scripts/fix-load-latest.mjs app
+      - name: Validate generated source and runtime tests
+        working-directory: app
+        run: |
+          node --check src/handler.js
+          node --check public/app.js
+          npm run check
+          node test-worker.mjs
+      - name: Ensure no test workflow deploys production
+        run: |
+          if grep -R "wrangler pages deploy" .github/workflows/test-product-file-upload.yml; then
+            echo "::error::Test workflow must not deploy to Cloudflare."
+            exit 1
+          fi
