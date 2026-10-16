@@ -77,6 +77,9 @@ jobs:
           mkdir -p app
           tar -xJf yourz-runtime.tar.xz -C app
 
+          # The file-preview archive parser is vendored locally; install it only in the temporary build workspace.
+          npm install --prefix app --no-save --package-lock=false jszip@3.10.1
+
           # Preserve the exact production transformations already used by the existing pipeline.
           node deploy-fixes/enable-admin-diagnostics.mjs app/src/handler.js
           node deploy-fixes/enable-public-entry.mjs app
@@ -186,7 +189,10 @@ jobs:
             "cache:'no-store'",
             'Loaded latest data / 已载入最新资料',
             "button.setAttribute('aria-busy','true')",
-            'Loading latest… / 正在载入…'
+            'Loading latest… / 正在载入…',
+            'YOURZ PRODUCT FILE LIBRARY V1',
+            'Shared product files / 产品资料文件库',
+            'parseXlsxPreview'
           ];
           if (indexStatus !== '200' || !markers.every(item => html.includes(item))) {
             console.error('Immutable deployment HTML does not reference the versioned refresh script.');
