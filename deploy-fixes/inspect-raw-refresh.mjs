@@ -6,11 +6,11 @@ const source = fs.readFileSync(file, 'utf8');
 console.log('RAW_APP_JS length=' + source.length);
 
 for (const token of [
-  'async function refresh',
-  'function refresh',
-  'function updateAccess',
+  "async function refresh",
+  "function refresh",
+  "function updateAccess",
   "api('/api/state'",
-  'getElementById(\\'refresh\\').onclick'
+  "getElementById('refresh').onclick"
 ]) {
   const i = source.indexOf(token);
   console.log('--- RAW_TOKEN ' + JSON.stringify(token) + ' index=' + i + ' ---');
