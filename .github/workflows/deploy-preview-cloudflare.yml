@@ -233,7 +233,7 @@ jobs:
           echo "Read-only health check passed."
 
           LOGIN_BODY="$(node -e 'process.stdout.write(JSON.stringify({username:process.env.PREVIEW_ADMIN_USER,password:process.env.PREVIEW_BOOTSTRAP_ADMIN_PASSWORD}))')"
-          LOGIN_HTTP="$(curl --silent --show-error --location --max-time 30 --dump-header /tmp/preview-login.headers --output /tmp/preview-login.json --write-out '%{http_code}' -X POST -H "Origin: $DEPLOY_URL" -H 'Content-Type: application/json' --data "$LOGIN_BODY" "$DEPLOY_URL/auth/local/login")"
+          LOGIN_HTTP="$(curl --silent --show-error --location --max-time 30 --cookie-jar /tmp/preview-cookies.txt --output /tmp/preview-login.json --write-out '%{http_code}' -X POST -H "Origin: $DEPLOY_URL" -H 'Content-Type: application/json' --data "$LOGIN_BODY" "$DEPLOY_URL/auth/local/login")"
           node - "$LOGIN_HTTP" /tmp/preview-login.json <<'NODE'
           const fs = require('node:fs');
           const http = process.argv[2];
@@ -245,9 +245,8 @@ jobs:
           console.log('Preview authentication smoke test passed; credentials omitted.');
           NODE
 
-          SESSION_COOKIE="$(node -e 'const fs=require("node:fs");const h=fs.readFileSync("/tmp/preview-login.headers","utf8");const line=h.split(/\r?\n/).find(x=>/^set-cookie:\s*__Host-factory-session=/i.test(x));if(line)process.stdout.write(line.trim().split(";")[0]);')"
-          test -n "$SESSION_COOKIE" || { echo "::error::Preview login did not return a session cookie."; exit 1; }
-          STATE_HTTP="$(curl --silent --show-error --location --max-time 30 --output /tmp/preview-state.json --write-out '%{http_code}' -H "Cookie: $SESSION_COOKIE" "$DEPLOY_URL/api/state")"
+          grep -q '__Host-factory-session' /tmp/preview-cookies.txt || { echo "::error::Preview login did not persist a session cookie."; exit 1; }
+          STATE_HTTP="$(curl --silent --show-error --location --max-time 30 --cookie /tmp/preview-cookies.txt --output /tmp/preview-state.json --write-out '%{http_code}' "$DEPLOY_URL/api/state")"
           node - "$STATE_HTTP" /tmp/preview-state.json <<'NODE'
           const fs = require('node:fs');
           const http = process.argv[2];
@@ -261,4 +260,4 @@ jobs:
 
       - name: Cleanup temporary secret file
         if: always()
-        run: rm -f /tmp/yourz-preview-secrets.json /tmp/d1-list.json /tmp/preview-health.txt /tmp/preview-tail.log /tmp/preview-login.headers /tmp/preview-login.json /tmp/preview-state.json
+        run: rm -f /tmp/yourz-preview-secrets.json /tmp/d1-list.json /tmp/preview-health.txt /tmp/preview-tail.log /tmp/preview-cookies.txt /tmp/preview-login.json /tmp/preview-state.json
