@@ -8,3 +8,4 @@ Retest after binding live-tail to exact deployment URL: 2026-10-16T03:41Z
 Retest deployment URL extraction fix: 2026-10-16T03:42Z
 Health check exact deployment URL: 2026-10-16T03:43Z
 Tail and health check same project alias: 2026-10-16T03:44Z
+Read-only refresh-module source diagnostic: 2026-10-16T04:09Z
