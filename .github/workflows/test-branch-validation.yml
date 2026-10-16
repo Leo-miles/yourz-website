@@ -7,6 +7,8 @@ on:
     paths:
       - "yourz-runtime.tar.xz"
       - "deploy-fixes/**"
+      - "docs/**"
+      - ".github/workflows/deploy-cloudflare.yml"
       - ".github/workflows/test-branch-validation.yml"
 
 permissions:
