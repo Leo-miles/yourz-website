@@ -174,7 +174,7 @@ jobs:
 
           # Validate the immutable deployment URL first, independent of custom-domain edge caches.
           DEPLOY_INDEX_HTTP="$(curl --silent --show-error --location --max-time 30 --output /tmp/deploy-index.html --write-out '%{http_code}' -H 'Cache-Control: no-cache' "$DEPLOY_URL/?v=yourz-refresh-20261016-3-files-20261016-2" || true)"
-          DEPLOY_ASSET_HTTP="$(curl --silent --show-error --location --max-time 30 --output /tmp/deploy-app.js --write-out '%{http_code}' -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' "$DEPLOY_URL/app.js?v=yourz-refresh-20261016-2" || true)"
+          DEPLOY_ASSET_HTTP="$(curl --silent --show-error --location --max-time 30 --output /tmp/deploy-app.js --write-out '%{http_code}' -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' "$DEPLOY_URL/app.js?v=yourz-refresh-20261016-3-files-20261016-2" || true)"
           node - "$DEPLOY_INDEX_HTTP" /tmp/deploy-index.html "$DEPLOY_ASSET_HTTP" /tmp/deploy-app.js <<'NODE'
           const fs = require('node:fs');
           const indexStatus = process.argv[2];
@@ -201,14 +201,14 @@ jobs:
 
           # Re-read the custom domain using a versioned URL to avoid the old unversioned app.js cache.
           DOMAIN_INDEX_HTTP="$(curl --silent --show-error --location --max-time 30 --output /tmp/yourz-index.html --write-out '%{http_code}' -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' "https://yourz.top/?v=yourz-refresh-20261016-3-files-20261016-2" || true)"
-          DOMAIN_ASSET_HTTP="$(curl --silent --show-error --location --max-time 30 --output /tmp/yourz-app.js --write-out '%{http_code}' -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' "https://yourz.top/app.js?v=yourz-refresh-20261016-2" || true)"
+          DOMAIN_ASSET_HTTP="$(curl --silent --show-error --location --max-time 30 --output /tmp/yourz-app.js --write-out '%{http_code}' -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' "https://yourz.top/app.js?v=yourz-refresh-20261016-3-files-20261016-2" || true)"
           node - "$DOMAIN_INDEX_HTTP" /tmp/yourz-index.html "$DOMAIN_ASSET_HTTP" /tmp/yourz-app.js <<'NODE'
           const fs = require('node:fs');
           const indexStatus = process.argv[2];
           const html = fs.readFileSync(process.argv[3], 'utf8');
           const assetStatus = process.argv[4];
           const source = fs.readFileSync(process.argv[5], 'utf8');
-          const markers = ['app.js?v=yourz-refresh-20261016-2'];
+          const markers = ['app.js?v=yourz-refresh-20261016-3&safe-import=20261016-1&files-v1=20261016-2'];
           const refreshMarkers = [
             "cache:'no-store'",
             'Loaded latest data / 已载入最新资料',
