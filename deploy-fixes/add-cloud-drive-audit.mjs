@@ -243,5 +243,7 @@ h = once(h,
   "headers.set('Content-Security-Policy', \"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'\");",
   "headers.set('Content-Security-Policy', \"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-src 'self' https://view.officeapps.live.com; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'self'\");",
   'allow same-site and Office viewer preview iframes');
+const backupLineBefore = "    const headers = securityHeaders(new Headers({ 'Content-Type':'application/json; charset=utf-8', 'Content-Disposition':" + tick + "attachment; filename=\\\"Supplier_Backup_${today(envTimeZone())}.json\\\"" + tick + " }), url.origin);";
+h = once(h, backupLineBefore, "    await writeAuditQuietly(env.DB,visitor,session,{method:'GET',action:'backup.download',targetType:'backup',targetName:'Full database backup'});\n" + backupLineBefore, 'audit direct full backup downloads');
 write('src/handler.js',h);
 console.log('Added R2 file APIs, visitor metadata, Office viewer tokens, and audit writes.');
