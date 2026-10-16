@@ -115,14 +115,13 @@ jobs:
           echo "a67d49b9fe80fa901b113eb29541609d2c19c543e459ae758de3e2267ef9b15c  yourz-runtime.tar.xz" | sha256sum -c -
           mkdir -p app
           tar -xJf yourz-runtime.tar.xz -C app
-          node deploy-fixes/inspect-raw-refresh.mjs app
           node deploy-fixes/enable-admin-diagnostics.mjs app/src/handler.js
           node deploy-fixes/adjust-cloudflare-pbkdf2.mjs app/src/handler.js
           node deploy-fixes/add-yourz-favicon.mjs app
           node deploy-fixes/add-cloud-drive-audit.mjs app
           node deploy-fixes/fix-d1-schema-exec.mjs app/src/handler.js
           node deploy-fixes/add-cloud-drive-ui.mjs app
-          node deploy-fixes/fix-load-latest.mjs app
+          node .github/scripts/fix-load-latest.mjs app
           node --check app/public/app.js
           cd app
           npm run check
