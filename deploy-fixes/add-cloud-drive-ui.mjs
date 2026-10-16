@@ -17,7 +17,7 @@ write('public/style.css',css);
 let a=read('public/app.js');
 a=once(a,
   "let session=null,busy=false,teamData=null,serverDay='',timeZone='Asia/Shanghai';",
-  "let session=null,busy=false,teamData=null,serverDay='',timeZone='Asia/Shanghai';\n let visitorInfo=null,initialPageLogged=false,driveData=null,driveFolders=[],driveError='',driveQuery='',driveCategory='all',driveFolder='all',driveFactory='all',driveTrash=false,drivePage=1,drivePageSize=50;",
+  "let session=null,busy=false,teamData=null,serverDay='',timeZone='Asia/Shanghai';\n let visitorInfo=null,initialPageLogged=false,driveData=null,driveFolders=[],driveError='',driveQuery='',driveCategory='all',driveFolder='all',driveFactory='all',driveTrash=false,drivePage=1,drivePageSize=50,searchAuditTimer=null,lastSearchAudit='';",
   'add client visitor and drive state');
 a=once(a,
   'session=data.session;serverDay=data.today;timeZone=data.timeZone;stale=false;updateAccess();render();',
@@ -97,7 +97,7 @@ a=once(a,
   "document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{view=b.dataset.view;selected='';query='';render();recordClientAudit('page.view','page',view,b.textContent||view);if(view==='team')loadTeam().catch(e=>toast(e.message));if(view==='drive')loadDrive();});",
   'wire navigation visits');
 const eventInsert = [
-" main.addEventListener('keydown',e=>{if(e.target?.id==='search'&&e.key==='Enter'){recordClientAudit('factory.search','factory-search','',e.target.value.trim());}if(e.target?.id==='drivesearch'&&e.key==='Enter'){e.preventDefault();driveQuery=e.target.value.trim();drivePage=1;loadDrive();}});",
+" main.addEventListener('keydown',e=>{if(e.target?.id==='drivesearch'&&e.key==='Enter'){e.preventDefault();driveQuery=e.target.value.trim();drivePage=1;loadDrive();}});",
 " main.addEventListener('change',async e=>{",
 "  try{if(e.target?.id==='driveupload'){const files=e.target.files;e.target.value='';await uploadDriveFiles(files);}",
 "  else if(e.target?.id==='drivecategory'){driveCategory=e.target.value;drivePage=1;await loadDrive();}",
@@ -109,7 +109,7 @@ const eventInsert = [
 a=once(a," main.addEventListener('submit',async e=>{",eventInsert+" main.addEventListener('submit',async e=>{",'add drive upload and device handlers');
 
 a=once(a,
-  " function render(){if(!session){renderLogin();return;}if(selected&&!state.factories.some(f=>f.id===selected))selected='';storageBadge();document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===view));let content=selected?profile(selected):view==='drive'?drive():view==='factories'?list():view==='trash'?list(true):view==='followups'?followups():view==='team'?team():guide();main.innerHTML=banner()+content;const search=document.getElementById('search');if(search)search.oninput=()=>{const pos=search.selectionStart;query=search.value;render();const n=document.getElementById('search');n.focus();n.setSelectionRange(pos,pos);};}",
+  " function render(){if(!session){renderLogin();return;}if(selected&&!state.factories.some(f=>f.id===selected))selected='';storageBadge();document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===view));let content=selected?profile(selected):view==='drive'?drive():view==='factories'?list():view==='trash'?list(true):view==='followups'?followups():view==='team'?team():guide();main.innerHTML=banner()+content;const search=document.getElementById('search');if(search)search.oninput=()=>{const pos=search.selectionStart;query=search.value;const searchText=query.trim();clearTimeout(searchAuditTimer);if(searchText.length>=2&&searchText!==lastSearchAudit){searchAuditTimer=setTimeout(()=>{if(searchText!==lastSearchAudit){lastSearchAudit=searchText;recordClientAudit('factory.search','factory-search','',searchText);}},700);}if(!searchText)lastSearchAudit='';render();const n=document.getElementById('search');n.focus();n.setSelectionRange(pos,pos);};}",
   " function render(){if(!session){renderLogin();return;}if(selected&&!state.factories.some(f=>f.id===selected))selected='';storageBadge();document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===view));let content=selected?profile(selected):view==='drive'?drive():view==='factories'?list():view==='trash'?list(true):view==='followups'?followups():view==='team'?team():guide();main.innerHTML=banner()+content;const search=document.getElementById('search');if(search)search.oninput=()=>{const pos=search.selectionStart;query=search.value;render();const n=document.getElementById('search');n.focus();n.setSelectionRange(pos,pos);};}",
   'keep rendered drive routing consistent');
 write('public/app.js',a);
