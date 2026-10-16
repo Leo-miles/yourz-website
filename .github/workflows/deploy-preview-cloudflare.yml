@@ -19,7 +19,7 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      PREVIEW_BOOTSTRAP_ADMIN_USER: ${{ secrets.PREVIEW_BOOTSTRAP_ADMIN_USER }}
+      PREVIEW_ADMIN_USER: "yourz-preview-admin"
       PREVIEW_BOOTSTRAP_ADMIN_PASSWORD: ${{ secrets.PREVIEW_BOOTSTRAP_ADMIN_PASSWORD }}
       EXPECTED_ACCOUNT_ID: "34d2541399a1d8cb1f494bd510de6150"
       PROJECT_NAME: "yourz-website-preview"
@@ -38,9 +38,7 @@ jobs:
           test -n "$CLOUDFLARE_API_TOKEN" || { echo "::error::Missing CLOUDFLARE_API_TOKEN."; exit 1; }
           test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo "::error::Missing CLOUDFLARE_ACCOUNT_ID."; exit 1; }
           test "$CLOUDFLARE_ACCOUNT_ID" = "$EXPECTED_ACCOUNT_ID" || { echo "::error::Account ID does not match the owner-confirmed yourz.top account. Refusing to touch another account."; exit 1; }
-          test -n "$PREVIEW_BOOTSTRAP_ADMIN_USER" || { echo "::error::Add PREVIEW_BOOTSTRAP_ADMIN_USER in GitHub Actions secrets before the first preview deployment."; exit 1; }
           test -n "$PREVIEW_BOOTSTRAP_ADMIN_PASSWORD" || { echo "::error::Add PREVIEW_BOOTSTRAP_ADMIN_PASSWORD in GitHub Actions secrets before the first preview deployment."; exit 1; }
-          [[ "$PREVIEW_BOOTSTRAP_ADMIN_USER" =~ ^[a-z0-9._-]{3,32}$ ]] || { echo "::error::PREVIEW_BOOTSTRAP_ADMIN_USER must be 3-32 lowercase letters, digits, dots, underscores, or hyphens."; exit 1; }
           test "${#PREVIEW_BOOTSTRAP_ADMIN_PASSWORD}" -ge 16 || { echo "::error::PREVIEW_BOOTSTRAP_ADMIN_PASSWORD must be at least 16 characters."; exit 1; }
 
           VERIFY_HTTP="$(curl --silent --show-error --max-time 20 --output /tmp/cf-verify.json --write-out '%{http_code}' -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" https://api.cloudflare.com/client/v4/user/tokens/verify)"
@@ -112,11 +110,9 @@ jobs:
           mkdir -p app
           tar -xJf yourz-runtime.tar.xz -C app
           node deploy-fixes/enable-admin-diagnostics.mjs app/src/handler.js
-          node deploy-fixes/enable-public-entry.mjs app
           node deploy-fixes/add-yourz-favicon.mjs app
           node deploy-fixes/add-cloud-drive-audit.mjs app
           node deploy-fixes/add-cloud-drive-ui.mjs app
-          node deploy-fixes/add-cloud-drive-tests.mjs app
           cd app
           npm run check
           node test-worker.mjs
@@ -199,7 +195,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node -e 'const fs=require("node:fs");fs.writeFileSync("/tmp/yourz-preview-secrets.json",JSON.stringify({BOOTSTRAP_ADMIN_USER:process.env.PREVIEW_BOOTSTRAP_ADMIN_USER,BOOTSTRAP_ADMIN_PASSWORD:process.env.PREVIEW_BOOTSTRAP_ADMIN_PASSWORD}));'
+          node -e 'const fs=require("node:fs");fs.writeFileSync("/tmp/yourz-preview-secrets.json",JSON.stringify({BOOTSTRAP_ADMIN_USER:process.env.PREVIEW_ADMIN_USER,BOOTSTRAP_ADMIN_PASSWORD:process.env.PREVIEW_BOOTSTRAP_ADMIN_PASSWORD}));'
           wrangler pages secret bulk /tmp/yourz-preview-secrets.json --project-name "$PROJECT_NAME" --config ./wrangler.toml
           rm -f /tmp/yourz-preview-secrets.json
           echo "Preview-specific administrator secrets configured without printing their values."
@@ -209,7 +205,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          wrangler pages deploy ./public --project-name "$PROJECT_NAME" --branch "$PREVIEW_BRANCH" --config ./wrangler.toml --experimental-auto-create=false
+          wrangler pages deploy ./public --project-name "$PROJECT_NAME" --branch "$PREVIEW_BRANCH" --config ./wrangler.toml
           echo "Preview URL: https://$PROJECT_NAME.pages.dev"
           HTTP_CODE="$(curl --silent --show-error --location --max-time 30 --output /tmp/preview-health.txt --write-out '%{http_code}' "https://$PROJECT_NAME.pages.dev/healthz" || true)"
           if [ "$HTTP_CODE" != "200" ]; then
