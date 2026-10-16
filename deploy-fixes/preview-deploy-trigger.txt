@@ -20,3 +20,4 @@ Apply Workers PBKDF2 compatibility in preview without changing auth flow: 2026-1
 Final isolated refresh API smoke test, no diagnostic dump: 2026-10-16T04:28Z
 Correct preview CI session-cookie parser and latest-state smoke check: 2026-10-16T04:30Z
 Use curl cookie jar for isolated preview session-to-state API smoke test: 2026-10-16T04:32Z
+Verify versioned app.js cache-busting in refresh-only test: 2026-10-16T06:24Z
