@@ -155,23 +155,58 @@ jobs:
           fi
           echo "Production health check passed."
 
-          ASSET_HTTP="$(curl --silent --show-error --location --max-time 30 --output /tmp/yourz-app.js --write-out '%{http_code}' -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' "https://yourz.top/app.js" || true)"
-          test "$ASSET_HTTP" = "200" || { echo "::error::Could not verify the published front-end script; HTTP $ASSET_HTTP."; exit 1; }
-          node - /tmp/yourz-app.js <<'NODE'
+          # Validate the immutable deployment URL first, independent of custom-domain edge caches.
+          DEPLOY_INDEX_HTTP="$(curl --silent --show-error --location --max-time 30 --output /tmp/deploy-index.html --write-out '%{http_code}' -H 'Cache-Control: no-cache' "$DEPLOY_URL/?v=yourz-refresh-20261016-2" || true)"
+          DEPLOY_ASSET_HTTP="$(curl --silent --show-error --location --max-time 30 --output /tmp/deploy-app.js --write-out '%{http_code}' -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' "$DEPLOY_URL/app.js?v=yourz-refresh-20261016-2" || true)"
+          node - "$DEPLOY_INDEX_HTTP" /tmp/deploy-index.html "$DEPLOY_ASSET_HTTP" /tmp/deploy-app.js <<'NODE'
           const fs = require('node:fs');
-          const source = fs.readFileSync(process.argv[2], 'utf8');
-          const expected = [
+          const indexStatus = process.argv[2];
+          const html = fs.readFileSync(process.argv[3], 'utf8');
+          const assetStatus = process.argv[4];
+          const source = fs.readFileSync(process.argv[5], 'utf8');
+          const markers = ['app.js?v=yourz-refresh-20261016-2'];
+          const refreshMarkers = [
             "cache:'no-store'",
             'Loaded latest data / 已载入最新资料',
             "button.setAttribute('aria-busy','true')",
             'Loading latest… / 正在载入…'
           ];
-          const missing = expected.filter(item => !source.includes(item));
-          if (missing.length) {
-            console.error('Published asset does not contain all refresh-module markers; failing verification.');
+          if (indexStatus !== '200' || !markers.every(item => html.includes(item))) {
+            console.error('Immutable deployment HTML does not reference the versioned refresh script.');
             process.exit(1);
           }
-          console.log('Published refresh-module asset verified.');
+          if (assetStatus !== '200' || !refreshMarkers.every(item => source.includes(item))) {
+            console.error('Immutable deployment asset does not contain the tested refresh behavior.');
+            process.exit(1);
+          }
+          console.log('Immutable production deployment HTML and refresh asset verified.');
+          NODE
+
+          # Re-read the custom domain using a versioned URL to avoid the old unversioned app.js cache.
+          DOMAIN_INDEX_HTTP="$(curl --silent --show-error --location --max-time 30 --output /tmp/yourz-index.html --write-out '%{http_code}' -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' "https://yourz.top/?v=yourz-refresh-20261016-2" || true)"
+          DOMAIN_ASSET_HTTP="$(curl --silent --show-error --location --max-time 30 --output /tmp/yourz-app.js --write-out '%{http_code}' -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' "https://yourz.top/app.js?v=yourz-refresh-20261016-2" || true)"
+          node - "$DOMAIN_INDEX_HTTP" /tmp/yourz-index.html "$DOMAIN_ASSET_HTTP" /tmp/yourz-app.js <<'NODE'
+          const fs = require('node:fs');
+          const indexStatus = process.argv[2];
+          const html = fs.readFileSync(process.argv[3], 'utf8');
+          const assetStatus = process.argv[4];
+          const source = fs.readFileSync(process.argv[5], 'utf8');
+          const markers = ['app.js?v=yourz-refresh-20261016-2'];
+          const refreshMarkers = [
+            "cache:'no-store'",
+            'Loaded latest data / 已载入最新资料',
+            "button.setAttribute('aria-busy','true')",
+            'Loading latest… / 正在载入…'
+          ];
+          if (indexStatus !== '200' || !markers.every(item => html.includes(item))) {
+            console.error('yourz.top HTML does not reference the versioned refresh script yet; deployment not considered verified.');
+            process.exit(1);
+          }
+          if (assetStatus !== '200' || !refreshMarkers.every(item => source.includes(item))) {
+            console.error('yourz.top versioned app.js did not return the tested refresh module; deployment not considered verified.');
+            process.exit(1);
+          }
+          console.log('yourz.top versioned refresh asset verified.');
           NODE
 
           STATE_HTTP="$(curl --silent --show-error --location --max-time 30 --output /tmp/yourz-state.json --write-out '%{http_code}' -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' "https://yourz.top/api/state" || true)"
@@ -188,4 +223,4 @@ jobs:
 
       - name: Remove temporary verification files
         if: always()
-        run: rm -f /tmp/d1-list.json /tmp/yourz-refresh-deploy.log /tmp/yourz-health.json /tmp/yourz-app.js /tmp/yourz-state.json
+        run: rm -f /tmp/d1-list.json /tmp/yourz-refresh-deploy.log /tmp/yourz-health.json /tmp/yourz-app.js /tmp/yourz-state.json /tmp/yourz-index.html /tmp/deploy-index.html /tmp/deploy-app.js
