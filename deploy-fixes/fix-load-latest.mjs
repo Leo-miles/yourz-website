@@ -8,9 +8,11 @@ const token = 'async function refresh(manual=false){';
 const index = source.indexOf(token);
 if (index < 0) throw new Error('Load-latest refresh function was not found.');
 const start = source.lastIndexOf('\n', index) + 1;
-const nextFunction = source.indexOf('\n  function updateAccess(){', index);
-if (nextFunction < 0) throw new Error('Could not locate the boundary after refresh().');
-const end = nextFunction + 1;
+const boundary = source.indexOf('function updateAccess(){', index);
+if (boundary < 0) throw new Error('Could not locate the boundary after refresh().');
+const newline = source.lastIndexOf('\n', boundary);
+if (newline < start) throw new Error('Refresh function boundary is before its start.');
+const end = newline + 1;
 const old = source.slice(start, end);
 if (!old.includes("api('/api/state')") ||
     !old.includes('visitorInfo=data.visitor||visitorInfo') ||
