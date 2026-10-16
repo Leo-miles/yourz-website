@@ -32,7 +32,7 @@ jobs:
           node deploy-fixes/add-yourz-favicon.mjs app
       - name: Install local preview libraries
         working-directory: app
-        run: npm install --no-save --package-lock=false xlsx@0.18.5 jszip@3.10.1
+        run: npm install --no-save --package-lock=false jszip@3.10.1
       - name: Apply file library changes on test workspace only
         run: node .github/scripts/fix-load-latest.mjs app
       - name: Validate generated source and runtime tests
