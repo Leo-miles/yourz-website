@@ -27,12 +27,13 @@
 
 | Name | Value 要求 |
 |---|---|
-| `PREVIEW_BOOTSTRAP_ADMIN_USER` | 单独的预览管理员用户名，3–32 个小写字母、数字、点、下划线或连字符 |
 | `PREVIEW_BOOTSTRAP_ADMIN_PASSWORD` | 单独的强密码，至少 16 个字符；不要复用生产站管理员密码 |
+
+预览管理员用户名固定为 `yourz-preview-admin`，无需另设用户名密钥。预览部署保留原有登录页面；工作流不会应用关闭登录验证的 public-entry 补丁。
 
 不要把密码填入代码、issue 或聊天。现有的 `CLOUDFLARE_API_TOKEN` 和 `CLOUDFLARE_ACCOUNT_ID` 也必须配置在 Actions secrets 中；Token 需要能验证账号，并有创建 Pages 项目、创建/读取 D1、查看和绑定 R2 的相应账号级权限。若权限不足，工作流会报告错误并停止；不要把 Token 发给任何人。
 
-为了避免当前就触发未准备好的云端部署，工作流文件和本文档本身的修改不会启动部署。它仅在测试分支上的 `yourz-runtime.tar.xz` 或 `deploy-fixes/**` 发生变更时自动启动；完成上述 secrets 后，再通过测试分支的一次受控提交触发。
+工作流目前设置为仅手动触发，以便先验证登录流程和测试资源隔离，再执行首次云端部署。
 
 预览站会使用 Cloudflare 提供的 `pages.dev` 地址，登录页面可从公网访问。预览验收阶段只使用无敏感信息的虚拟样本，不要上传真实报价、合同或个人信息。Cloudflare R2/D1/Pages 虽有免费额度或免费层，超额度仍可能收费。
 
