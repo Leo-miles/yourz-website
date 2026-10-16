@@ -30,76 +30,79 @@ jobs:
         run: |
           set -euo pipefail
           HTTP_CODE="$(curl --silent --show-error --max-time 20 --output /tmp/cf-token-verify.json --write-out '%{http_code}' -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" https://api.cloudflare.com/client/v4/user/tokens/verify)"
-          node - "$HTTP_CODE" /tmp/cf-token-verify.json <<'NODE'
-          const fs = require('node:fs');
-          let data = {};
-          try { data = JSON.parse(fs.readFileSync(process.argv[3], 'utf8')); } catch {}
-          if (process.argv[2] !== '200' || data.success !== true || data.result?.status !== 'active') {
-            console.error('Cloudflare token is not active. No R2 bucket operation attempted.');
-            process.exit(1);
-          }
-          console.log('Cloudflare token is active.');
-          NODE
+          node -e '
+            const fs = require("node:fs");
+            let data = {};
+            try { data = JSON.parse(fs.readFileSync(process.argv[2], "utf8")); } catch {}
+            if (process.argv[1] !== "200" || data.success !== true || data.result?.status !== "active") {
+              console.error("Cloudflare token is not active. No R2 bucket operation attempted.");
+              process.exit(1);
+            }
+            console.log("Cloudflare token is active.");
+          ' "$HTTP_CODE" /tmp/cf-token-verify.json
 
       - name: Create bucket if and only if it is missing, then verify
         shell: bash
         run: |
           set -euo pipefail
+
           fetch_buckets() {
             curl --silent --show-error --max-time 20 --output /tmp/cf-r2-buckets.json --write-out '%{http_code}'               -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"               "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/r2/buckets?name_contains=$BUCKET_NAME&per_page=1000"
           }
-          LIST_HTTP="$(fetch_buckets)"
-          node - "$LIST_HTTP" /tmp/cf-r2-buckets.json "$BUCKET_NAME" <<'NODE'
-          const fs = require('node:fs');
-          let data = {};
-          try { data = JSON.parse(fs.readFileSync(process.argv[3], 'utf8')); } catch {}
-          if (process.argv[2] !== '200' || data.success !== true) {
-            console.error('Could not list R2 buckets. The token may lack R2 read permission or the account ID may be incorrect. No bucket created.');
-            process.exit(1);
-          }
-          const target = (data.result?.buckets || []).find(b => b.name === process.argv[4]);
-          console.log(target ? 'Bucket already exists; create request will be skipped.' : 'Bucket is missing; one create request will be attempted.');
-          NODE
 
-          if node - /tmp/cf-r2-buckets.json "$BUCKET_NAME" <<'NODE'
-          const fs = require('node:fs');
-          const data = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-          process.exit((data.result?.buckets || []).some(b => b.name === process.argv[3]) ? 0 : 1);
-          NODE
-          then
+          LIST_HTTP="$(fetch_buckets)"
+          node -e '
+            const fs = require("node:fs");
+            let data = {};
+            try { data = JSON.parse(fs.readFileSync(process.argv[2], "utf8")); } catch {}
+            if (process.argv[1] !== "200" || data.success !== true) {
+              console.error("Could not list R2 buckets. The token may lack R2 read permission or the account ID may be incorrect. No bucket created.");
+              process.exit(1);
+            }
+            console.log((data.result?.buckets || []).some(b => b.name === process.argv[3])
+              ? "Bucket already exists; create request will be skipped."
+              : "Bucket is missing; one create request will be attempted.");
+          ' "$LIST_HTTP" /tmp/cf-r2-buckets.json "$BUCKET_NAME"
+
+          if node -e '
+            const fs = require("node:fs");
+            const data = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+            process.exit((data.result?.buckets || []).some(b => b.name === process.argv[2]) ? 0 : 1);
+          ' /tmp/cf-r2-buckets.json "$BUCKET_NAME"; then
             echo "No create operation needed."
           else
             CREATE_HTTP="$(curl --silent --show-error --max-time 30 --output /tmp/cf-r2-create.json --write-out '%{http_code}'               -X POST               -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"               -H "Content-Type: application/json"               --data "{\"name\":\"$BUCKET_NAME\"}"               "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/r2/buckets")"
-            node - "$CREATE_HTTP" /tmp/cf-r2-create.json "$BUCKET_NAME" <<'NODE'
-            const fs = require('node:fs');
-            let data = {};
-            try { data = JSON.parse(fs.readFileSync(process.argv[3], 'utf8')); } catch {}
-            if (!['200','201'].includes(process.argv[2]) || data.success !== true) {
-              const errors = (data.errors || []).map(e => [e.code, e.message].filter(Boolean).join(': ')).filter(Boolean).join('; ').slice(0, 500);
-              console.error('R2 bucket creation failed (HTTP ' + process.argv[2] + '). No other resources will be changed.' + (errors ? ' Cloudflare response: ' + errors : ''));
-              process.exit(1);
-            }
-            console.log('Cloudflare accepted the bucket-create request for ' + process.argv[4] + '.');
-            NODE
+
+            node -e '
+              const fs = require("node:fs");
+              let data = {};
+              try { data = JSON.parse(fs.readFileSync(process.argv[2], "utf8")); } catch {}
+              if (!["200", "201"].includes(process.argv[1]) || data.success !== true) {
+                const errors = (data.errors || []).map(e => [e.code, e.message].filter(Boolean).join(": ")).filter(Boolean).join("; ").slice(0, 500);
+                console.error("R2 bucket creation failed (HTTP " + process.argv[1] + "). No other resources will be changed." + (errors ? " Cloudflare response: " + errors : ""));
+                process.exit(1);
+              }
+              console.log("Cloudflare accepted the bucket-create request for " + process.argv[3] + ".");
+            ' "$CREATE_HTTP" /tmp/cf-r2-create.json "$BUCKET_NAME"
           fi
 
           FINAL_HTTP="$(fetch_buckets)"
-          node - "$FINAL_HTTP" /tmp/cf-r2-buckets.json "$BUCKET_NAME" <<'NODE'
-          const fs = require('node:fs');
-          let data = {};
-          try { data = JSON.parse(fs.readFileSync(process.argv[3], 'utf8')); } catch {}
-          if (process.argv[2] !== '200' || data.success !== true) {
-            console.error('Could not confirm the bucket after the create check. No deployment was attempted.');
-            process.exit(1);
-          }
-          const target = (data.result?.buckets || []).find(b => b.name === process.argv[4]);
-          if (!target) {
-            console.error('The exact bucket name was not found after the create request. No deployment was attempted.');
-            process.exit(1);
-          }
-          console.log('R2_BUCKET_RESULT=FOUND');
-          console.log('Verified existing bucket: ' + target.name + '. No objects were uploaded and no website was deployed.');
-          NODE
+          node -e '
+            const fs = require("node:fs");
+            let data = {};
+            try { data = JSON.parse(fs.readFileSync(process.argv[2], "utf8")); } catch {}
+            if (process.argv[1] !== "200" || data.success !== true) {
+              console.error("Could not confirm the bucket after the create check. No deployment was attempted.");
+              process.exit(1);
+            }
+            const target = (data.result?.buckets || []).find(b => b.name === process.argv[3]);
+            if (!target) {
+              console.error("The exact bucket name was not found after the create request. No deployment was attempted.");
+              process.exit(1);
+            }
+            console.log("R2_BUCKET_RESULT=FOUND");
+            console.log("Verified bucket: " + target.name + ". No objects were uploaded and no website was deployed.");
+          ' "$FINAL_HTTP" /tmp/cf-r2-buckets.json "$BUCKET_NAME"
 
       - name: Remove temporary verification data
         if: always()
