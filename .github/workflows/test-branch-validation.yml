@@ -43,6 +43,7 @@ jobs:
           node deploy-fixes/add-yourz-favicon.mjs app
           node deploy-fixes/add-cloud-drive-audit.mjs app
           node deploy-fixes/add-cloud-drive-ui.mjs app
+          node deploy-fixes/add-cloud-drive-tests.mjs app
 
       - name: Run static checks
         working-directory: app
