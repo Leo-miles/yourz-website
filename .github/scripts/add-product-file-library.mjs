@@ -185,6 +185,72 @@ if (!app.includes('YOURZ PRODUCT FILE LIBRARY V1')) {
   const renderPatch = 'main.innerHTML=banner()+content;if(view===\'guide\'){renderProductFiles();bindProductFileInput();if(!productFilesLoading)loadProductFiles(true).catch(()=>{});}const search=document.getElementById(\'search\');if(search)';
   app = replaceOnce(app, renderAnchor, renderPatch, 'load shared file list in Guide & files view');
   write('public/app.js', app);
+  // Isolated R2/D1 tests run only in Node's in-memory test worker; no production resources are used.
+  let test = read('test-worker.mjs');
+  if (!test.includes('YOURZ_PRODUCT_FILES_TESTS_V1')) {
+    const dbAnchor = "const DB = new D1Mock();\nconst env = { DB, BOOTSTRAP_ADMIN_USER:'admin', BOOTSTRAP_ADMIN_PASSWORD:'A-Strong-Test-Password-123!', TIME_ZONE:'Asia/Shanghai' };";
+    const dbPatch = [
+      '/* YOURZ_PRODUCT_FILES_TESTS_V1 */',
+      'class R2Mock {',
+      '  constructor() { this.objects = new Map(); }',
+      '  async put(key, body, options = {}) { const bytes = new Uint8Array(await new Response(body).arrayBuffer()); this.objects.set(key, { bytes, options }); }',
+      '  async get(key) { const saved = this.objects.get(key); return saved ? { body:new Blob([saved.bytes]).stream(), size:saved.bytes.length, httpMetadata:saved.options.httpMetadata || {} } : null; }',
+      '  async delete(key) { this.objects.delete(key); }',
+      '}',
+      'const DB = new D1Mock();',
+      'const FILES = new R2Mock();',
+      "const env = { DB, FILES, BOOTSTRAP_ADMIN_USER:'admin', BOOTSTRAP_ADMIN_PASSWORD:'A-Strong-Test-Password-123!', TIME_ZONE:'Asia/Shanghai' };"
+    ].join('\n');
+    test = replaceOnce(test, dbAnchor, dbPatch, 'add isolated R2 mock to runtime tests');
+
+    const healthAnchor = "const health = await request('/healthz');";
+    const rawHelper = [
+      'async function rawRequest(path, { method = "GET", body, cookie, csrf, contentType = "application/octet-stream", contentLength, origin = "https://yourz.example.test" } = {}) {',
+      '  const headers = new Headers();',
+      '  if (body !== undefined) { headers.set("Content-Type", contentType); headers.set("Origin", origin); if (csrf) headers.set("X-CSRF-Token", csrf); if (contentLength !== undefined) headers.set("X-File-Size", String(contentLength)); }',
+      '  if (cookie) headers.set("Cookie", cookie);',
+      '  const req = new Request(origin + path, { method, headers, body:body === undefined ? undefined : body });',
+      '  const response = await onRequest({ request:req, env, next:async() => new Response("STATIC") });',
+      '  let data = {}; try { data = await response.clone().json(); } catch {}',
+      '  return { status:response.status, data, response };',
+      '}',
+      healthAnchor
+    ].join('\n');
+    test = replaceOnce(test, healthAnchor, rawHelper, 'add binary upload test request helper');
+
+    const permissionAnchor = "const viewOnly = await request('/api/team',{method:'POST',body:{action:'role',userId:'coworker1',role:'viewer'},cookie:adminCookie,csrf});";
+    const fileTests = [
+      'const samplePdf = new Uint8Array([37,80,68,70,45,49,46,55,10,37,89,79,85,82,90,10]);',
+      'const fileUpload = await rawRequest("/api/files?name=" + encodeURIComponent("产品资料.pdf"), { method:"POST", body:samplePdf, cookie:memberCookie, csrf:memberState.session.csrf, contentLength:samplePdf.byteLength });',
+      'assert.equal(fileUpload.status,201, JSON.stringify(fileUpload.data));',
+      'const uploadedFileId = fileUpload.data.file.id;',
+      'assert.equal(fileUpload.data.file.file_name,"产品资料.pdf");',
+      'assert.equal(fileUpload.data.file.size,samplePdf.byteLength);',
+      'const fileList = await request("/api/files?page=1",{cookie:adminCookie});',
+      'assert.equal(fileList.status,200, await fileList.clone().text());',
+      'const fileListData = await fileList.json(); assert.equal(fileListData.total,1); assert.equal(fileListData.files[0].id,uploadedFileId);',
+      'const fileContent = await rawRequest("/api/files/" + uploadedFileId + "/content",{cookie:adminCookie});',
+      'assert.equal(fileContent.status,200, JSON.stringify(fileContent.data));',
+      'assert.deepEqual(Array.from(new Uint8Array(await fileContent.response.arrayBuffer())),Array.from(samplePdf));',
+      'const fileDelete = await request("/api/files/" + uploadedFileId,{method:"DELETE",body:{},cookie:adminCookie,csrf});',
+      'assert.equal(fileDelete.status,200, await fileDelete.clone().text());',
+      'assert.equal(FILES.objects.size,0);',
+      'const fileListAfterDelete = await request("/api/files?page=1",{cookie:adminCookie});',
+      'assert.equal((await fileListAfterDelete.json()).total,0);',
+      permissionAnchor
+    ].join('\n');
+    test = replaceOnce(test, permissionAnchor, fileTests, 'test editor upload, list, download stream, and delete');
+    const viewOnlyAssert = "assert.equal(memberWrite.status,403);";
+    test = replaceOnce(test, viewOnlyAssert, viewOnlyAssert + '\nconst viewerUpload = await rawRequest("/api/files?name=denied.pdf",{method:"POST",body:samplePdf,cookie:memberCookie,csrf:memberState.session.csrf,contentLength:samplePdf.byteLength});\nassert.equal(viewerUpload.status,403);', 'test viewer cannot upload');
+    write('test-worker.mjs', test);
+  }
+
+  let css = read('public/style.css');
+  if (!css.includes('YOURZ PRODUCT FILE PREVIEW STYLES V1')) {
+    css += '\n\n/* YOURZ PRODUCT FILE PREVIEW STYLES V1 */\n.product-file-preview{max-height:72vh;overflow:auto;min-width:0}.product-pdf-preview{display:block;width:100%;height:min(72vh,850px);border:0;background:#fff}.product-image-preview{display:block;max-width:100%;max-height:72vh;margin:0 auto;object-fit:contain}.pptx-slide-preview{border:1px solid #dbe5ef;border-radius:10px;padding:14px;margin:12px 0;white-space:normal}.product-file-preview table{max-width:100%;border-collapse:collapse}.product-file-preview th,.product-file-preview td{border:1px solid #dbe5ef;padding:6px 8px;text-align:left;vertical-align:top;overflow-wrap:anywhere}\n';
+    write('public/style.css', css);
+  }
+
   console.log('Product file UI added: upload, paged shared listing, download, PDF/image preview, Excel tables, and readable Word/PPT text preview.');
 }
 
