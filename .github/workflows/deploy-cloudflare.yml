@@ -91,6 +91,8 @@ jobs:
           node deploy-fixes/enable-admin-diagnostics.mjs app/src/handler.js
           node deploy-fixes/enable-public-entry.mjs app
           node deploy-fixes/add-yourz-favicon.mjs app
+          node deploy-fixes/add-cloud-drive-audit.mjs app
+          node deploy-fixes/add-cloud-drive-ui.mjs app
           cd app
           npm run check
           node test-worker.mjs
