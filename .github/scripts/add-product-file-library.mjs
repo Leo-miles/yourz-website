@@ -32,7 +32,7 @@ if (!handler.includes('YOURZ_PRODUCT_FILES_SCHEMA_V1')) {
     'const MAX_PRODUCT_FILE_BYTES = 20 * 1024 * 1024;',
     'function productFileName(value) {',
     "  let name = text(value, 500).replace(/[\\\\/]/g, '/').split('/').pop().trim();",
-    "  name = name.replace(/[\u0000-\u001f\u007f]/g, '').slice(0, 220);",
+    "  name = name.replace(/[\\u0000-\\u001f\\u007f]/g, '').slice(0, 220);",
     "  if (!name || name === '.' || name === '..') fail(400, 'File name is invalid / 文件名无效');",
     '  return name;',
     '}',
@@ -84,7 +84,7 @@ if (!handler.includes('YOURZ_PRODUCT_FILES_SCHEMA_V1')) {
     '    }',
     '    return jsonResponse(request, 201, { ok:true, file:{ id, file_name:fileName, content_type:contentType, size, uploaded_by:session.userId, uploaded_at:uploadedAt } });',
     '  }',
-    '  const contentMatch = route.match(/^\/api\/files\/([A-Za-z0-9_-]{43})\/content$/);',
+    '  const contentMatch = route.match(/^\\/api\\/files\\/([A-Za-z0-9_-]{43})\\/content$/);',
     "  if (contentMatch && method === 'GET') {",
     "    const meta = await env.DB.prepare('SELECT id,file_name,content_type,size,object_key FROM uploaded_files WHERE id=?').bind(contentMatch[1]).first();",
     "    if (!meta) fail(404, 'File not found / 文件不存在');",
@@ -95,7 +95,7 @@ if (!handler.includes('YOURZ_PRODUCT_FILES_SCHEMA_V1')) {
     "    const headers = securityHeaders(new Headers({ 'Content-Type':meta.content_type, 'Content-Length':String(meta.size), 'Content-Disposition':disposition + \"; filename*=UTF-8''\" + encodedName, 'Cache-Control':'private, no-store' }), url.origin);",
     '    return new Response(object.body, { status:200, headers });',
     '  }',
-    '  const deleteMatch = route.match(/^\/api\/files\/([A-Za-z0-9_-]{43})$/);',
+    '  const deleteMatch = route.match(/^\\/api\\/files\\/([A-Za-z0-9_-]{43})$/);',
     "  if (deleteMatch && method === 'DELETE') {",
     '    productFileWriteGuard(request, session);',
     "    if (!(request.headers.get('Content-Type') || '').startsWith('application/json')) fail(415, 'Use JSON content / 数据格式必须为JSON');",
@@ -115,7 +115,7 @@ if (!handler.includes('YOURZ_PRODUCT_FILES_SCHEMA_V1')) {
     helperAnchor
   ].join('\n');
   handler = replaceOnce(handler, helperAnchor, helperPatch, 'product file route helpers');
-  const routeAnchor = '  const session = await currentSession(request, env.DB);';
+  const routeAnchor = '  let session = await currentSession(request, env.DB);';
   const routePatch = [
     routeAnchor,
     '  if (route === "/api/files" || route.startsWith("/api/files/")) {',
