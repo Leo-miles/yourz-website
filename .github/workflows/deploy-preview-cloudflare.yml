@@ -213,7 +213,15 @@ jobs:
           set -euo pipefail
           wrangler pages deploy ./public --project-name "$PROJECT_NAME" --branch "$PREVIEW_BRANCH"
           echo "Preview URL: https://$PROJECT_NAME.pages.dev"
+          # Capture a short, error-only live tail around the read-only health check.
+          # The tail command is best-effort; its failure must not hide the health result.
+          timeout 10s wrangler pages deployment tail --project-name "$PROJECT_NAME" --environment production --status error --format json > /tmp/preview-tail.log 2>&1 &
+          TAIL_PID=$!
+          sleep 2
           HTTP_CODE="$(curl --silent --show-error --location --max-time 30 --output /tmp/preview-health.txt --write-out '%{http_code}' "https://$PROJECT_NAME.pages.dev/healthz" || true)"
+          wait "$TAIL_PID" || true
+          echo "Cloudflare live error-tail diagnostic (may be unavailable if the token lacks log access):"
+          tail -n 80 /tmp/preview-tail.log 2>/dev/null || true
           if [ "$HTTP_CODE" != "200" ]; then
             echo "::error::Preview deployment was requested, but the read-only /healthz check returned HTTP $HTTP_CODE. No production domain or DNS was changed."
             cat /tmp/preview-health.txt 2>/dev/null || true
@@ -223,4 +231,4 @@ jobs:
 
       - name: Cleanup temporary secret file
         if: always()
-        run: rm -f /tmp/yourz-preview-secrets.json /tmp/d1-list.json /tmp/preview-health.txt
+        run: rm -f /tmp/yourz-preview-secrets.json /tmp/d1-list.json /tmp/preview-health.txt /tmp/preview-tail.log
