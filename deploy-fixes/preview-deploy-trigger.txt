@@ -1,0 +1,22 @@
+Controlled trigger for the dedicated isolated preview workflow. No secrets or production configuration belong in this file.
+Retest trigger after preserving the preview login flow; deploy remains isolated to the preview project, D1, and R2 bucket.
+Retry marker: 2026-10-16T02:53Z
+Retry after D1 helper heredoc fix: 2026-10-16T03:36Z
+Retry after default Wrangler Pages config fix: 2026-10-16T03:37Z
+Retry with isolated runtime-error tail: 2026-10-16T03:38Z
+Retest after binding live-tail to exact deployment URL: 2026-10-16T03:41Z
+Retest deployment URL extraction fix: 2026-10-16T03:42Z
+Health check exact deployment URL: 2026-10-16T03:43Z
+Tail and health check same project alias: 2026-10-16T03:44Z
+Read-only refresh-module source diagnostic: 2026-10-16T04:09Z
+Capture unfiltered logs and health-check the exact preview deployment: 2026-10-16T04:14Z
+Health-check URL correction for exact preview deployment: 2026-10-16T04:16Z
+Temporary preview handler diagnostics: 2026-10-16T04:17Z
+Log D1 schema failure details in isolated preview: 2026-10-16T04:20Z
+Retry schema diagnostics after newline fix: 2026-10-16T04:21Z
+Expose short non-sensitive error only in isolated preview response for diagnosis: 2026-10-16T04:22Z
+Execute preview D1 schema statements individually, then recheck refresh: 2026-10-16T04:24Z
+Apply Workers PBKDF2 compatibility in preview without changing auth flow: 2026-10-16T04:26Z
+Final isolated refresh API smoke test, no diagnostic dump: 2026-10-16T04:28Z
+Correct preview CI session-cookie parser and latest-state smoke check: 2026-10-16T04:30Z
+Use curl cookie jar for isolated preview session-to-state API smoke test: 2026-10-16T04:32Z

@@ -1,0 +1,263 @@
+name: Deploy isolated Cloudflare preview (test-only)
+
+on:
+  push:
+    branches:
+      - "test/cloud-drive-audit-v1"
+    paths:
+      - "yourz-runtime.tar.xz"
+      - "deploy-fixes/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: yourz-isolated-preview
+  cancel-in-progress: false
+
+jobs:
+  deploy-preview:
+    # A manual run must also target the designated test branch.
+    if: github.ref == 'refs/heads/test/cloud-drive-audit-v1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      PREVIEW_ADMIN_USER: "yourz-preview-admin"
+      PREVIEW_BOOTSTRAP_ADMIN_PASSWORD: ${{ secrets.PREVIEW_BOOTSTRAP_ADMIN_PASSWORD }}
+      EXPECTED_ACCOUNT_ID: "34d2541399a1d8cb1f494bd510de6150"
+      PROJECT_NAME: "yourz-website-preview"
+      DATABASE_NAME: "yourz-factory-preview-db"
+      R2_BUCKET_NAME: "yourz-documents-preview"
+      PREVIEW_BRANCH: "preview"
+
+    steps:
+      - name: Checkout test branch only
+        uses: actions/checkout@v4
+
+      - name: Verify credentials and account guardrails
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo "::error::Missing CLOUDFLARE_API_TOKEN."; exit 1; }
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo "::error::Missing CLOUDFLARE_ACCOUNT_ID."; exit 1; }
+          test "$CLOUDFLARE_ACCOUNT_ID" = "$EXPECTED_ACCOUNT_ID" || { echo "::error::Account ID does not match the owner-confirmed yourz.top account. Refusing to touch another account."; exit 1; }
+          test -n "$PREVIEW_BOOTSTRAP_ADMIN_PASSWORD" || { echo "::error::Add PREVIEW_BOOTSTRAP_ADMIN_PASSWORD in GitHub Actions secrets before the first preview deployment."; exit 1; }
+          test "${#PREVIEW_BOOTSTRAP_ADMIN_PASSWORD}" -ge 16 || { echo "::error::PREVIEW_BOOTSTRAP_ADMIN_PASSWORD must be at least 16 characters."; exit 1; }
+
+          VERIFY_HTTP="$(curl --silent --show-error --max-time 20 --output /tmp/cf-verify.json --write-out '%{http_code}' -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" https://api.cloudflare.com/client/v4/user/tokens/verify)"
+          node - "$VERIFY_HTTP" /tmp/cf-verify.json <<'NODE'
+          const fs = require('node:fs');
+          const http = process.argv[2];
+          const body = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
+          if (http !== '200' || body.success !== true || body.result?.status !== 'active') {
+            console.error('Cloudflare API token verification failed. No preview resources were changed.');
+            for (const e of (body.errors || [])) console.error(String(e.code ?? '') + ' ' + String(e.message || ''));
+            process.exit(1);
+          }
+          console.log('Cloudflare API token is active.');
+          NODE
+
+          R2_HTTP="$(curl --silent --show-error --max-time 20 --output /tmp/r2-buckets.json --write-out '%{http_code}' -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$EXPECTED_ACCOUNT_ID/r2/buckets?per_page=100")"
+          node - "$R2_HTTP" /tmp/r2-buckets.json "$R2_BUCKET_NAME" <<'NODE'
+          const fs = require('node:fs');
+          const http = process.argv[2];
+          const body = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
+          const expected = process.argv[4];
+          if (http !== '200' || body.success !== true) {
+            console.error('Could not verify R2 bucket access. Check that the token has R2 read/edit permission. No preview resources were changed.');
+            for (const e of (body.errors || [])) console.error(String(e.code ?? '') + ' ' + String(e.message || ''));
+            process.exit(1);
+          }
+          let found = false;
+          const walk = v => {
+            if (!v || typeof v !== 'object') return;
+            if (Array.isArray(v)) return v.forEach(walk);
+            if (v.name === expected || v.bucket_name === expected) found = true;
+            Object.values(v).forEach(walk);
+          };
+          walk(body.result);
+          if (!found) {
+            console.error('The expected private test bucket was not found in this Cloudflare account: ' + expected);
+            process.exit(1);
+          }
+          console.log('Verified existing R2 bucket: ' + expected);
+          NODE
+
+          D1_HTTP="$(curl --silent --show-error --max-time 20 --output /tmp/d1-access.json --write-out '%{http_code}' -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$EXPECTED_ACCOUNT_ID/d1/database?per_page=1")"
+          node - "$D1_HTTP" /tmp/d1-access.json <<'NODE'
+          const fs = require('node:fs');
+          const http = process.argv[2];
+          const body = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
+          if (http !== '200' || body.success !== true) {
+            console.error('D1 account access check failed. Check D1 permissions. No preview resources were changed.');
+            for (const e of (body.errors || [])) console.error(String(e.code ?? '') + ' ' + String(e.message || ''));
+            process.exit(1);
+          }
+          console.log('D1 account access check passed.');
+          NODE
+          rm -f /tmp/cf-verify.json /tmp/r2-buckets.json /tmp/d1-access.json
+
+      - name: Set up Node.js and Wrangler
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Wrangler
+        run: npm install --global wrangler@4
+
+      - name: Verify package and run isolated R2 simulation before provisioning
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "a67d49b9fe80fa901b113eb29541609d2c19c543e459ae758de3e2267ef9b15c  yourz-runtime.tar.xz" | sha256sum -c -
+          mkdir -p app
+          tar -xJf yourz-runtime.tar.xz -C app
+          node deploy-fixes/enable-admin-diagnostics.mjs app/src/handler.js
+          node deploy-fixes/adjust-cloudflare-pbkdf2.mjs app/src/handler.js
+          node deploy-fixes/add-yourz-favicon.mjs app
+          node deploy-fixes/add-cloud-drive-audit.mjs app
+          node deploy-fixes/fix-d1-schema-exec.mjs app/src/handler.js
+          node deploy-fixes/add-cloud-drive-ui.mjs app
+          node .github/scripts/fix-load-latest.mjs app
+          node --check app/public/app.js
+          cd app
+          npm run check
+          node test-worker.mjs
+
+      - name: Create or find dedicated preview D1 database
+        shell: bash
+        run: |
+          set -euo pipefail
+          export DATABASE_NAME
+          wrangler d1 list --json > /tmp/d1-list.json
+          find_db_id() {
+            node - /tmp/d1-list.json "$DATABASE_NAME" <<'NODE'
+            const fs = require('node:fs');
+            const all = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+            const target = process.argv[3];
+            const walk = v => {
+              if (Array.isArray(v)) { for (const x of v) { const r = walk(x); if (r) return r; } }
+              else if (v && typeof v === 'object') {
+                const name = v.name || v.database_name || v.databaseName;
+                const id = v.uuid || v.database_id || v.databaseId || v.id;
+                if (name === target && id) return String(id);
+                for (const x of Object.values(v)) { const r = walk(x); if (r) return r; }
+              }
+              return '';
+            };
+            process.stdout.write(walk(all));
+          NODE
+          }
+          DB_ID="$(find_db_id)"
+          if [ -z "$DB_ID" ]; then
+            wrangler d1 create "$DATABASE_NAME" --location apac
+            wrangler d1 list --json > /tmp/d1-list.json
+            DB_ID="$(find_db_id)"
+          fi
+          test -n "$DB_ID" || { echo "::error::Could not resolve the dedicated preview D1 database ID."; exit 1; }
+          echo "DB_ID=$DB_ID" >> "$GITHUB_ENV"
+          echo "Dedicated preview D1 database is ready (ID omitted from logs)."
+
+      - name: Create or find isolated Pages project (no custom domain)
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          CREATE_OUTPUT="$(wrangler pages project create "$PROJECT_NAME" --production-branch "$PREVIEW_BRANCH" 2>&1)"
+          CREATE_STATUS=$?
+          set -e
+          if [ "$CREATE_STATUS" -eq 0 ]; then
+            echo "Dedicated preview Pages project created."
+          elif printf '%s' "$CREATE_OUTPUT" | grep -Eqi 'already exists|8000002'; then
+            echo "Dedicated preview Pages project already exists; reusing it."
+          else
+            echo "$CREATE_OUTPUT"
+            exit "$CREATE_STATUS"
+          fi
+
+      - name: Configure only the test D1 and test R2 bucket
+        working-directory: app
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > wrangler.toml <<EOF
+          name = "$PROJECT_NAME"
+          pages_build_output_dir = "./public"
+          compatibility_date = "2026-10-11"
+          compatibility_flags = ["nodejs_compat"]
+          send_metrics = false
+
+          [[d1_databases]]
+          binding = "DB"
+          database_name = "$DATABASE_NAME"
+          database_id = "$DB_ID"
+
+          [[r2_buckets]]
+          binding = "FILES"
+          bucket_name = "$R2_BUCKET_NAME"
+          EOF
+
+      - name: Set preview-only administrator secrets
+        working-directory: app
+        shell: bash
+        run: |
+          set -euo pipefail
+          node -e 'const fs=require("node:fs");fs.writeFileSync("/tmp/yourz-preview-secrets.json",JSON.stringify({BOOTSTRAP_ADMIN_USER:process.env.PREVIEW_ADMIN_USER,BOOTSTRAP_ADMIN_PASSWORD:process.env.PREVIEW_BOOTSTRAP_ADMIN_PASSWORD}));'
+          wrangler pages secret bulk /tmp/yourz-preview-secrets.json --project-name "$PROJECT_NAME" --config ./wrangler.toml
+          rm -f /tmp/yourz-preview-secrets.json
+          echo "Preview-specific administrator secrets configured without printing their values."
+
+      - name: Deploy to isolated pages.dev preview only
+        working-directory: app
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEPLOY_OUTPUT="$(wrangler pages deploy ./public --project-name "$PROJECT_NAME" --branch "$PREVIEW_BRANCH" 2>&1)"
+          printf '%s\\n' "$DEPLOY_OUTPUT"
+          DEPLOY_URL="$(printf '%s\\n' "$DEPLOY_OUTPUT" | grep -Eo 'https://[A-Za-z0-9.-]+[.]pages[.]dev' | tail -n 1)"
+          if [ -z "$DEPLOY_URL" ]; then
+            echo "::error::Could not resolve the deployed preview URL from Wrangler output. No production domain or DNS was changed."
+            exit 1
+          fi
+          echo "Preview deployment URL: $DEPLOY_URL"
+          echo "Preview project alias: https://$PROJECT_NAME.pages.dev"
+          HTTP_CODE="$(curl --silent --show-error --location --max-time 30 --output /tmp/preview-health.txt --write-out '%{http_code}' "${DEPLOY_URL}/healthz" || true)"
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::Preview deployment was requested, but the read-only /healthz check returned HTTP $HTTP_CODE. No production domain or DNS was changed."
+            cat /tmp/preview-health.txt 2>/dev/null || true
+            exit 1
+          fi
+          echo "Read-only health check passed."
+
+          LOGIN_BODY="$(node -e 'process.stdout.write(JSON.stringify({username:process.env.PREVIEW_ADMIN_USER,password:process.env.PREVIEW_BOOTSTRAP_ADMIN_PASSWORD}))')"
+          LOGIN_HTTP="$(curl --silent --show-error --location --max-time 30 --cookie-jar /tmp/preview-cookies.txt --output /tmp/preview-login.json --write-out '%{http_code}' -X POST -H "Origin: $DEPLOY_URL" -H 'Content-Type: application/json' --data "$LOGIN_BODY" "$DEPLOY_URL/auth/local/login")"
+          node - "$LOGIN_HTTP" /tmp/preview-login.json <<'NODE'
+          const fs = require('node:fs');
+          const http = process.argv[2];
+          const body = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
+          if (http !== '200' || body.error) {
+            console.error('Preview authentication smoke test failed; response body omitted for safety.');
+            process.exit(1);
+          }
+          console.log('Preview authentication smoke test passed; credentials omitted.');
+          NODE
+
+          grep -q '__Host-factory-session' /tmp/preview-cookies.txt || { echo "::error::Preview login did not persist a session cookie."; exit 1; }
+          STATE_HTTP="$(curl --silent --show-error --location --max-time 30 --cookie /tmp/preview-cookies.txt --output /tmp/preview-state.json --write-out '%{http_code}' "$DEPLOY_URL/api/state")"
+          node - "$STATE_HTTP" /tmp/preview-state.json <<'NODE'
+          const fs = require('node:fs');
+          const http = process.argv[2];
+          const body = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
+          if (http !== '200' || !body.state || !Array.isArray(body.state.factories) || !Number.isInteger(body.state.revision)) {
+            console.error('Authenticated latest-state API smoke test failed. HTTP=' + http + ', error=' + String(body.error || body.code || 'invalid response').slice(0,160) + ', statePresent=' + Boolean(body.state));
+            process.exit(1);
+          }
+          console.log('Authenticated latest-state API smoke test passed (revision=' + body.state.revision + ', factory rows=' + body.state.factories.length + ').');
+          NODE
+
+      - name: Cleanup temporary secret file
+        if: always()
+        run: rm -f /tmp/yourz-preview-secrets.json /tmp/d1-list.json /tmp/preview-health.txt /tmp/preview-tail.log /tmp/preview-cookies.txt /tmp/preview-login.json /tmp/preview-state.json
