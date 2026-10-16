@@ -204,6 +204,7 @@ const newBatch = "  const writeToken = token();\n" +
 "  const details = {};\n" +
 "  if (input.type === 'factory.save' && newFactory) { const prior=old.factories.find(f=>f.id===recordId); const keys=[...factoryFields,'advantages']; const changed=keys.filter(k=>JSON.stringify(prior?.[k] ?? null)!==JSON.stringify(newFactory[k] ?? null)); details.changedFields=changed; details.before={}; details.after={}; for(const k of changed){details.before[k]=String(prior?.[k] ?? '').slice(0,180);details.after[k]=String(newFactory[k] ?? '').slice(0,180);} }\n" +
 "  else if (input.type === 'child.save') details.kind = input.kind;\n" +
+"  else if (['factory.delete','factory.restore','factory.purge'].includes(input.type) && oldFactory) { const nextStatus=input.type==='factory.delete'?'deleted':input.type==='factory.restore'?'active':'purged'; details.before={status:oldFactory.status||'active',name:oldFactory.name}; details.after={status:nextStatus}; }\n" +
 "  let detailText = JSON.stringify(details); if (detailText.length>4500) detailText=JSON.stringify({truncated:true,changedFields:details.changedFields||[]}); const v=visitor||{};\n" +
 "  const batch = await db.batch([\n" +
 "    db.prepare('UPDATE workspace SET payload=?,revision=?,write_token=? WHERE id=1 AND revision=?').bind(packed,next.revision,writeToken,old.revision),\n" +
