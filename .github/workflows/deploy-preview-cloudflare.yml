@@ -117,9 +117,10 @@ jobs:
           tar -xJf yourz-runtime.tar.xz -C app
           node deploy-fixes/enable-admin-diagnostics.mjs app/src/handler.js
           node deploy-fixes/add-yourz-favicon.mjs app
-          node deploy-fixes/inspect-refresh.mjs app
           node deploy-fixes/add-cloud-drive-audit.mjs app
           node deploy-fixes/add-cloud-drive-ui.mjs app
+          node deploy-fixes/fix-load-latest.mjs app
+          node --check app/public/app.js
           cd app
           npm run check
           node test-worker.mjs
@@ -222,7 +223,7 @@ jobs:
           echo "Preview deployment URL: $DEPLOY_URL"
           echo "Preview project alias: https://$PROJECT_NAME.pages.dev"
           # Tail this exact deployment, as Wrangler requires a positional deployment URL in CI.
-          timeout 12s wrangler pages deployment tail "https://$PROJECT_NAME.pages.dev" --project-name "$PROJECT_NAME" --environment production --status error --format json > /tmp/preview-tail.log 2>&1 &
+          timeout 12s wrangler pages deployment tail "$DEPLOY_URL" --project-name "$PROJECT_NAME" --environment production --status error --format json > /tmp/preview-tail.log 2>&1 &
           TAIL_PID=$!
           sleep 2
           HTTP_CODE="$(curl --silent --show-error --location --max-time 30 --output /tmp/preview-health.txt --write-out '%{http_code}' "https://$PROJECT_NAME.pages.dev/healthz" || true)"
