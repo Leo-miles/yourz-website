@@ -9,15 +9,16 @@ const before = `  } catch (e) {
 `;
 const after = `  } catch (e) {
     const known = e instanceof AppError;
+    const route = new URL(request.url).pathname;
+    const errorName = e instanceof Error ? e.name : 'UnknownError';
+    const errorMessage = String(e?.message || e || 'Unknown error').replace(/[\\r\\n\\t]+/g, ' ').slice(0, 240);
+    console.error('[yourz] Caught route exception', {
+      route, method: request.method, known, status: known ? e.status : 500,
+      code: known ? (e.code || 'error') : 'error', errorName, errorMessage,
+      stack: String(e?.stack || '').slice(0, 1200)
+    });
     let message = known ? e.message : 'Server error; records unchanged / 服务器错误，资料未更改';
     if (!known) {
-      const route = new URL(request.url).pathname;
-      const errorName = e instanceof Error ? e.name : 'UnknownError';
-      const errorMessage = String(e?.message || e || 'Unknown error').replace(/[\\r\\n\\t]+/g, ' ').slice(0, 240);
-      console.error('[yourz] Unhandled server exception', {
-        route, method: request.method, errorName, errorMessage,
-        stack: String(e?.stack || '').slice(0, 1200)
-      });
       // Show a short diagnostic only to a currently authenticated administrator.
       // Never return stack traces, cookies, request bodies, or secrets to ordinary users.
       try {

@@ -9,7 +9,7 @@ function show(label, token, before=400, after=2600) {
   console.log('--- ' + label + ' index=' + i + ' ---');
   if(i>=0) console.log(source.slice(Math.max(0,i-before),Math.min(source.length,i+after)));
 }
-show('currentSession','async function currentSession');
+show('SCHEMA','const SCHEMA',0,7000);\nshow('doEnsureSchema','async function doEnsureSchema',100,2200);\nshow('ensureSchema','async function ensureSchema',100,1400);\nshow('ensureBootstrapAdmin','async function ensureBootstrapAdmin',100,2400);\nshow('currentSession','async function currentSession');
 show('healthz-route',"route === '/healthz'",200,1400);
 show('handleApp','async function handleApp',100,2800);
 show('onRequest','export async function onRequest',100,3000);
