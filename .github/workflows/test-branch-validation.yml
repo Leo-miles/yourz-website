@@ -24,6 +24,12 @@ jobs:
       - name: Checkout test branch
         uses: actions/checkout@v4
 
+      - name: Validate workflow YAML syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          ruby -ryaml -e 'ARGV.each { |path| YAML.parse_file(path); puts "YAML syntax OK: #{path}" }' .github/workflows/*.yml
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
