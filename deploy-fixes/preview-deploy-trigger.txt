@@ -4,3 +4,4 @@ Retry marker: 2026-10-16T02:53Z
 Retry after D1 helper heredoc fix: 2026-10-16T03:36Z
 Retry after default Wrangler Pages config fix: 2026-10-16T03:37Z
 Retry with isolated runtime-error tail: 2026-10-16T03:38Z
+Retest after binding live-tail to exact deployment URL: 2026-10-16T03:41Z
