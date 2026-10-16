@@ -11,18 +11,42 @@
 - 单文件上传目前限制 25 MB；支持 DOC、DOCX、XLS、XLSX、PPT、PPTX、PDF、CSV、TXT 和常见图片。云盘列表采用分页。
 - PDF/常见图片由网站直接预览；Office 预览用 Microsoft Office Online Viewer 的短期链接。
 
+## 独立预览环境
+
+测试分支新增了专用工作流：`.github/workflows/deploy-preview-cloudflare.yml`。它只允许从 `test/cloud-drive-audit-v1` 分支触发，目标资源固定为：
+
+- Pages 项目：`yourz-website-preview`（不绑定自定义域名、不修改 DNS）
+- D1 数据库：`yourz-factory-preview-db`（独立测试库，不复用 `yourz-factory-db`）
+- R2 存储桶：`yourz-documents-preview`（专用测试桶，保持私有，绑定名为 `FILES`）
+
+工作流在创建/部署任何测试资源前，会先检查 Cloudflare API Token、账号 ID、目标 R2 桶和源程序测试。账号 ID 会与当前所有者确认的账号 `34d2541399a1d8cb1f494bd510de6150` 比对；不匹配时会停止。工作流不会创建/修改自定义域名、DNS 记录或生产资源。
+
+### 首次预览部署需要的 GitHub Actions secrets
+
+在 GitHub 仓库「Settings → Secrets and variables → Actions → New repository secret」中添加两个**仅供测试站使用**的密钥：
+
+| Name | Value 要求 |
+|---|---|
+| `PREVIEW_BOOTSTRAP_ADMIN_USER` | 单独的预览管理员用户名，3–32 个小写字母、数字、点、下划线或连字符 |
+| `PREVIEW_BOOTSTRAP_ADMIN_PASSWORD` | 单独的强密码，至少 16 个字符；不要复用生产站管理员密码 |
+
+不要把密码填入代码、issue 或聊天。现有的 `CLOUDFLARE_API_TOKEN` 和 `CLOUDFLARE_ACCOUNT_ID` 也必须配置在 Actions secrets 中；Token 需要能验证账号，并有创建 Pages 项目、创建/读取 D1、查看和绑定 R2 的相应账号级权限。若权限不足，工作流会报告错误并停止；不要把 Token 发给任何人。
+
+为了避免当前就触发未准备好的云端部署，工作流文件和本文档本身的修改不会启动部署。它仅在测试分支上的 `yourz-runtime.tar.xz` 或 `deploy-fixes/**` 发生变更时自动启动；完成上述 secrets 后，再通过测试分支的一次受控提交触发。
+
+预览站会使用 Cloudflare 提供的 `pages.dev` 地址，登录页面可从公网访问。预览验收阶段只使用无敏感信息的虚拟样本，不要上传真实报价、合同或个人信息。Cloudflare R2/D1/Pages 虽有免费额度或免费层，超额度仍可能收费。
+
 ## 上线前必须完成
 
-1. 在 Cloudflare R2 中创建私有 bucket，例如 `yourz-documents-preview`（预览环境专用），生产环境以后另行设置独立 bucket。
-2. 先建立完全独立的预览项目/环境，使用独立 D1 测试数据库与独立 R2 bucket；严禁把预览绑定到生产 D1 或生产文件桶。
-3. 在 Cloudflare Pages 预览项目中打开 Settings → Bindings → Add → R2 bucket，变量名必须设为 `FILES`，并选择预览 bucket。Cloudflare 官方说明：绑定必须先有 bucket，再添加绑定；部署后才生效。生产和 Preview 的绑定可以分别设置。参考：https://developers.cloudflare.com/pages/functions/bindings/
-4. 先做一次预览部署，并用真实但不敏感的 DOCX、XLSX、PPTX、PDF 文件验证中文文件名、Office Viewer、下载、版本恢复与回收站。
-5. 核对访问/操作日志。当前有日志写入能力，但日志查看页的开放范围按需求暂缓，之后再由项目所有者确定。
-6. 核对备份策略、日志保留期和访问留痕告知。访客 ID 依赖浏览器 Cookie；删除 Cookie、换浏览器或使用 VPN 都会影响设备关联；IP 地区为估算而非 GPS。
+1. 已创建私有 R2 bucket：`yourz-documents-preview`。正式环境以后必须另行设置独立 bucket。
+2. 完成首次专用预览部署，确认独立 D1 与 R2 绑定生效，且预览页面不指向生产资源。
+3. 用真实但不敏感的 DOCX、XLSX、PPTX、PDF 测试中文文件名、Office Viewer、下载、版本恢复与回收站。
+4. 核对访问/操作日志。当前有日志写入能力，但日志查看页的开放范围按需求暂缓，之后再由项目所有者确定。
+5. 核对备份策略、日志保留期和访问留痕告知。访客 ID 依赖浏览器 Cookie；删除 Cookie、换浏览器或使用 VPN 都会影响设备关联；IP 地区为估算而非 GPS。
 
 ## 部署安全警告
 
-现有 `.github/workflows/deploy-cloudflare.yml` 是正式部署流程：它使用项目名 `yourz-website`、把部署分支固定为 `main`，并自动处理正式域名 `yourz.top`。**不要用它来测试预览，也不要直接合并本 PR**；否则可能触发正式环境发布。应先建立不绑定正式域名的专用预览流程，并检查预览数据库/文件桶与生产环境完全隔离。
+现有 `.github/workflows/deploy-cloudflare.yml` 是正式部署流程：它使用项目名 `yourz-website`、生产数据库 `yourz-factory-db`，并处理正式域名 `yourz.top`。**不要用它来测试预览，也不要直接合并本 PR**；合并后可能触发正式环境发布。专用预览流程与正式部署流程分开维护。
 
 ## 免费额度与停止条件
 
@@ -41,7 +65,8 @@ Microsoft Office Online Viewer 需要从源 URL 获取原文件。当前设计�
 - Test-branch static checks: passed
 - Existing Worker/D1 simulation: passed
 - Mocked R2 upload/list, temporary Office source token, replace/version restore, trash restore and audit event assertions: passed
-- Real Cloudflare R2 binding: not configured
+- Dedicated preview workflow: added to test branch; not triggered by workflow/docs-only changes
+- Real Cloudflare R2 binding: not yet deployed/verified
 - Real Microsoft Office Viewer: not tested against real files
-- Dedicated isolated preview project/DB/R2: not created
+- Dedicated isolated preview project/DB: not yet provisioned
 - Production deployment: not performed
