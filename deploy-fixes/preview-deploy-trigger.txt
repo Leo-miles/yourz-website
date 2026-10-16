@@ -1,0 +1,1 @@
+Controlled trigger for the dedicated isolated preview workflow. No secrets or production configuration belong in this file.
