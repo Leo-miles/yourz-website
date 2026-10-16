@@ -1,12 +1,6 @@
 name: Deploy isolated Cloudflare preview (test-only)
 
 on:
-  push:
-    branches:
-      - "test/cloud-drive-audit-v1"
-    paths:
-      - "yourz-runtime.tar.xz"
-      - "deploy-fixes/**"
   workflow_dispatch:
 
 permissions:
