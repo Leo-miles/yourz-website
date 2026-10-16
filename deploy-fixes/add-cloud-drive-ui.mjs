@@ -2,7 +2,18 @@ import fs from 'node:fs';
 const root = process.argv[2] || 'app';
 const read = p => fs.readFileSync(root + '/' + p, 'utf8');
 const write = (p, s) => fs.writeFileSync(root + '/' + p, s);
-function once(source,before,after,label){if(!source.includes(before))throw new Error('Patch target missing: '+label);return source.replace(before,after);}
+function once(source,before,after,label){
+  if(source.includes(before))return source.replace(before,after);
+  if(label==='display device label'){
+    const marker="document.getElementById('refresh').hidden=!session;";
+    const addition="document.getElementById('devicebtn').hidden=!session;document.getElementById('devicebtn').textContent=visitorInfo&&visitorInfo.label?'设备：'+visitorInfo.label:'设备备注';";
+    if(source.includes("document.getElementById('devicebtn').hidden=!session;"))return source;
+    if(!source.includes(marker))throw new Error('Patch target missing and safe fallback could not locate refresh visibility.');
+    console.log('Inserted device-label display using guarded updateAccess fallback.');
+    return source.replace(marker,marker+addition);
+  }
+  throw new Error('Patch target missing: '+label);
+}
 const tick=String.fromCharCode(96), dollar=String.fromCharCode(36);
 
 let i=read('public/index.html');
