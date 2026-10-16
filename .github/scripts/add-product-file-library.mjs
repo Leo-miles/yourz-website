@@ -144,7 +144,7 @@ if (!app.includes('YOURZ PRODUCT FILE LIBRARY V1')) {
   const statePatch = stateAnchor + "\n /* YOURZ PRODUCT FILE LIBRARY V1 */\n let productFileRows=[],productFileTotal=0,productFilePage=1,productFilePageSize=50,productFilesLoading=false,activeProductPreviewUrl='';";
   app = replaceOnce(app, stateAnchor, statePatch, 'product file UI state');
 
-  const guideAnchor = '<p class="sub">One shared database for your team / 团队共用一个资料库</p></div><div class="panel guide">';
+  const guideAnchor = '<p class="sub">One shared database for your team / 团队共用一个资料库</p></div></div><div class="panel guide">';
   const guidePatch = '<p class="sub">One shared database for your team / 团队共用一个资料库</p></div>' + '$' + '{productFilesPanel()}' + '<div class="panel guide">';
   app = replaceOnce(app, guideAnchor, guidePatch, 'insert shared product-file library into Guide & files');
 
