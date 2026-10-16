@@ -57,9 +57,11 @@ jobs:
           name: test-branch-source-review
           path: |
             app/src/**
+            app/functions/**
             app/public/**
             app/package*.json
             app/test-worker.mjs
+            app/wrangler.toml
           if-no-files-found: warn
           retention-days: 3
 
