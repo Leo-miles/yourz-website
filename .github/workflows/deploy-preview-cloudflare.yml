@@ -211,17 +211,23 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          wrangler pages deploy ./public --project-name "$PROJECT_NAME" --branch "$PREVIEW_BRANCH"
-          echo "Preview URL: https://$PROJECT_NAME.pages.dev"
-          # Capture a short, error-only live tail around the read-only health check.
-          # The tail command is best-effort; its failure must not hide the health result.
-          timeout 10s wrangler pages deployment tail --project-name "$PROJECT_NAME" --environment production --status error --format json > /tmp/preview-tail.log 2>&1 &
+          DEPLOY_OUTPUT="$(wrangler pages deploy ./public --project-name "$PROJECT_NAME" --branch "$PREVIEW_BRANCH" 2>&1)"
+          printf '%s\\n' "$DEPLOY_OUTPUT"
+          DEPLOY_URL="$(printf '%s\\n' "$DEPLOY_OUTPUT" | grep -Eo 'https://[A-Za-z0-9.-]+\\.yourz-website-preview\\.pages\\.dev|https://[A-Za-z0-9.-]+\\.pages\\.dev' | tail -n 1)"
+          if [ -z "$DEPLOY_URL" ]; then
+            echo "::error::Could not resolve the deployed preview URL from Wrangler output. No production domain or DNS was changed."
+            exit 1
+          fi
+          echo "Preview deployment URL: $DEPLOY_URL"
+          echo "Preview project alias: https://$PROJECT_NAME.pages.dev"
+          # Tail this exact deployment, as Wrangler requires a positional deployment URL in CI.
+          timeout 12s wrangler pages deployment tail "$DEPLOY_URL" --project-name "$PROJECT_NAME" --environment production --status error --format json > /tmp/preview-tail.log 2>&1 &
           TAIL_PID=$!
           sleep 2
           HTTP_CODE="$(curl --silent --show-error --location --max-time 30 --output /tmp/preview-health.txt --write-out '%{http_code}' "https://$PROJECT_NAME.pages.dev/healthz" || true)"
           wait "$TAIL_PID" || true
-          echo "Cloudflare live error-tail diagnostic (may be unavailable if the token lacks log access):"
-          tail -n 80 /tmp/preview-tail.log 2>/dev/null || true
+          echo "Cloudflare live error-tail diagnostic (best-effort):"
+          tail -n 100 /tmp/preview-tail.log 2>/dev/null || true
           if [ "$HTTP_CODE" != "200" ]; then
             echo "::error::Preview deployment was requested, but the read-only /healthz check returned HTTP $HTTP_CODE. No production domain or DNS was changed."
             cat /tmp/preview-health.txt 2>/dev/null || true
