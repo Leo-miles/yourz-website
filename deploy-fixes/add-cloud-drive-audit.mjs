@@ -131,7 +131,7 @@ const helpers = [
 "    const category=String(url.searchParams.get('category')||'');if(category&&category!=='all'){where.push('category=?');args.push(validateCategory(category));}",
 "    const clause=where.join(' AND '),count=await db.prepare('SELECT COUNT(*) AS total FROM drive_files WHERE '+clause).bind(...args).first();",
 "    const result=await db.prepare('SELECT id,original_filename,extension,content_type,file_size,category,folder_id,factory_id,uploaded_by,visitor_id,uploaded_at,updated_at,deleted_at,current_version FROM drive_files WHERE '+clause+' ORDER BY updated_at DESC LIMIT ? OFFSET ?').bind(...args,pageSize,(page-1)*pageSize).all();",
-"    await writeAuditQuietly(db,visitor,session,{method:'GET',action:'file.list',targetType:'folder',targetId:folderId,targetName:factoryId,details:{page,pageSize,trash,category:category||'all',queryPresent:!!q}});",
+"    await writeAuditQuietly(db,visitor,session,{method:'GET',action:'file.list',targetType:'folder',targetId:folderId,targetName:factoryId,details:{page,pageSize,trash,category:category||'all',query:q}});",
 "    return jsonResponse(request,200,{files:result.results||[],total:Number(count?.total||0),page,pageSize,trash});",
 "  }",
 "  if(route==='/api/files/folders'&&method==='GET'){const result=await db.prepare('SELECT id,name,parent_id,created_at,created_by FROM drive_folders WHERE deleted_at IS NULL ORDER BY name').all();return jsonResponse(request,200,{folders:result.results||[]});}",
