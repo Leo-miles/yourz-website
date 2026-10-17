@@ -1,0 +1,380 @@
+name: YOURZ product-file upload integration test
+
+on:
+  push:
+    branches:
+      - test/product-file-upload-integration
+
+permissions:
+  contents: read
+
+jobs:
+  preview-integration:
+    name: Test upload API with isolated D1 and real R2
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      PROJECT_NAME: yourz-website
+      PREVIEW_BRANCH: file-upload-smoke
+      TEST_DATABASE_NAME: yourz-product-file-test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Wrangler and verify credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo "::error::Missing Cloudflare token; no deployment attempted."; exit 1; }
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo "::error::Missing Cloudflare account ID; no deployment attempted."; exit 1; }
+          npm install --global wrangler@4
+          HTTP_CODE="$(curl --silent --show-error --max-time 20 --output /tmp/cf-token-verify.json --write-out '%{http_code}' -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" https://api.cloudflare.com/client/v4/user/tokens/verify)"
+          node -e '
+            const fs = require("node:fs");
+            let body = {};
+            try { body = JSON.parse(fs.readFileSync(process.argv[2], "utf8")); } catch {}
+            if (process.argv[1] !== "200" || body.success !== true || body.result?.status !== "active") {
+              console.error("Cloudflare token verification failed.");
+              process.exit(1);
+            }
+            console.log("Cloudflare token is active.");
+          ' "$HTTP_CODE" /tmp/cf-token-verify.json
+          rm -f /tmp/cf-token-verify.json
+
+      - name: Create or reuse the dedicated non-production D1 test database
+        shell: bash
+        run: |
+          set -euo pipefail
+          wrangler d1 list --json > /tmp/d1-list-before.json
+          EXISTS="$(node -e '
+            const fs = require("node:fs");
+            const parsed = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+            const walk = value => {
+              if (Array.isArray(value)) return value.some(walk);
+              if (value && typeof value === "object") {
+                if ((value.name || value.database_name || value.databaseName) === process.argv[2]) return true;
+                return Object.values(value).some(walk);
+              }
+              return false;
+            };
+            process.stdout.write(walk(parsed) ? "yes" : "no");
+          ' /tmp/d1-list-before.json "$TEST_DATABASE_NAME")"
+
+          if [ "$EXISTS" = "no" ]; then
+            echo "Creating an isolated D1 test database named $TEST_DATABASE_NAME (not the production database)."
+            wrangler d1 create "$TEST_DATABASE_NAME" --location apac
+          else
+            echo "The dedicated test database already exists; production database will not be used."
+          fi
+
+          wrangler d1 list --json > /tmp/d1-list-after.json
+          TEST_DB_ID="$(node -e '
+            const fs = require("node:fs");
+            const parsed = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+            const target = process.argv[2];
+            const walk = value => {
+              if (Array.isArray(value)) {
+                for (const item of value) { const found = walk(item); if (found) return found; }
+              } else if (value && typeof value === "object") {
+                const name = value.name || value.database_name || value.databaseName;
+                const id = value.uuid || value.database_id || value.databaseId || value.id;
+                if (name === target && id) return String(id);
+                for (const item of Object.values(value)) { const found = walk(item); if (found) return found; }
+              }
+              return "";
+            };
+            process.stdout.write(walk(parsed));
+          ' /tmp/d1-list-after.json "$TEST_DATABASE_NAME")"
+          test -n "$TEST_DB_ID" || { echo "::error::Could not resolve the dedicated test database ID; refusing to deploy."; exit 1; }
+          echo "TEST_DB_ID=$TEST_DB_ID" >> "$GITHUB_ENV"
+          rm -f /tmp/d1-list-before.json /tmp/d1-list-after.json
+          echo "Dedicated test DB ready. No production D1 database was changed."
+
+      - name: Build and test the product-file application in a temporary workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "a67d49b9fe80fa901b113eb29541609d2c19c543e459ae758de3e2267ef9b15c  yourz-runtime.tar.xz" | sha256sum -c -
+          mkdir -p app
+          tar -xJf yourz-runtime.tar.xz -C app
+          npm install --prefix app --no-save --package-lock=false jszip@3.10.1
+          node deploy-fixes/enable-admin-diagnostics.mjs app/src/handler.js
+          node deploy-fixes/enable-public-entry.mjs app
+          node deploy-fixes/add-yourz-favicon.mjs app
+          node --check .github/scripts/fix-load-latest.mjs
+          node .github/scripts/fix-load-latest.mjs app
+          cd app
+          node --check src/handler.js
+          node --check public/app.js
+          npm run check
+          node test-worker.mjs
+          echo "Application patch and in-memory endpoint tests passed."
+
+      - name: Add temporary API gate to protect the public preview during testing
+        shell: bash
+        run: |
+          set -euo pipefail
+          SMOKE_GATE="$(openssl rand -hex 32)"
+          echo "::add-mask::$SMOKE_GATE"
+          echo "SMOKE_GATE=$SMOKE_GATE" >> "$GITHUB_ENV"
+          mkdir -p app/functions
+          if [ -e app/functions/_middleware.js ]; then
+            echo "::error::An existing Functions middleware was found; refusing to overwrite it."
+            exit 1
+          fi
+          cat > app/functions/_middleware.js <<EOF
+          export async function onRequest({ request, next }) {
+            if (request.headers.get("X-YOURZ-SMOKE-GATE") !== "$SMOKE_GATE") {
+              return new Response("Not found", {
+                status: 404,
+                headers: { "cache-control": "no-store", "x-content-type-options": "nosniff" }
+              });
+            }
+            return next();
+          }
+          EOF
+          node --check app/functions/_middleware.js
+          echo "Preview API gate created with a one-run random key; it is not committed to the repository."
+
+      - name: Configure only the preview environment with staging D1 and existing R2
+        working-directory: app
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > wrangler.toml <<EOF
+          name = "yourz-website"
+          pages_build_output_dir = "./public"
+          compatibility_date = "2026-10-17"
+          compatibility_flags = ["nodejs_compat"]
+          send_metrics = false
+
+          [[d1_databases]]
+          binding = "DB"
+          database_name = "$TEST_DATABASE_NAME"
+          database_id = "$TEST_DB_ID"
+
+          [[r2_buckets]]
+          binding = "FILES"
+          bucket_name = "yourz-product-files"
+          EOF
+          echo "Wrangler config binds preview functions to the isolated test DB and the existing R2 bucket; no production database ID is included."
+
+      - name: Deploy to preview branch only
+        working-directory: app
+        shell: bash
+        run: |
+          set -euo pipefail
+          wrangler pages deploy ./public --project-name "$PROJECT_NAME" --branch "$PREVIEW_BRANCH" --commit-dirty=true 2>&1 | tee /tmp/yourz-upload-preview-deploy.log
+          echo "Uploaded the integration fixture to preview branch '$PREVIEW_BRANCH'; production branch and custom domain were not targeted."
+
+      - name: Exercise the real product-file API against staging D1 and the actual R2 bucket
+        shell: bash
+        env:
+          PREVIEW_URL: https://file-upload-smoke.yourz-website.pages.dev
+        run: |
+          set -euo pipefail
+          cat > /tmp/test-product-file-api.mjs <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFile } from 'node:fs/promises';
+
+          const base = process.env.PREVIEW_URL;
+          const gate = process.env.SMOKE_GATE;
+          const runId = process.env.GITHUB_RUN_ID || 'local';
+          assert.ok(base && gate, 'Preview test is missing its base URL or API gate.');
+
+          const prefix = 'YOURZ_R2_INTEGRATION_' + runId + '_';
+          let cookie = '';
+          let csrf = '';
+          let uploaded = [];
+
+          async function request(path, options = {}) {
+            const headers = new Headers({ Accept: 'application/json', 'X-YOURZ-SMOKE-GATE': gate });
+            if (options.cookie || cookie) headers.set('Cookie', options.cookie || cookie);
+            let body;
+            if (options.binary !== undefined) {
+              body = options.binary;
+              headers.set('Content-Type', options.contentType);
+              headers.set('Origin', base);
+              headers.set('X-CSRF-Token', options.csrf || csrf);
+              headers.set('X-File-Size', String(options.binary.byteLength));
+            } else if (options.json !== undefined) {
+              body = JSON.stringify(options.json);
+              headers.set('Content-Type', 'application/json');
+              headers.set('Origin', base);
+              headers.set('X-CSRF-Token', options.csrf || csrf);
+            }
+            const response = await fetch(new URL(path, base), {
+              method: options.method || 'GET',
+              headers,
+              body,
+              redirect: 'manual',
+              cache: 'no-store'
+            });
+            const setCookies = response.headers.getSetCookie?.() || [response.headers.get('set-cookie') || ''];
+            const combined = setCookies.join('; ');
+            const found = combined.match(/__Host-factory-session=[^;,\s]+/);
+            if (found) cookie = found[0];
+            const raw = await response.text();
+            let data = {};
+            try { data = JSON.parse(raw); } catch { data = { raw: raw.slice(0, 250) }; }
+            return { response, status: response.status, data, raw };
+          }
+
+          async function listFiles() {
+            const result = await request('/api/files?page=1');
+            assert.equal(result.status, 200, 'File list failed: ' + JSON.stringify(result.data));
+            return result.data;
+          }
+
+          async function deleteFile(id) {
+            const result = await request('/api/files/' + encodeURIComponent(id), { method: 'DELETE', json: {} });
+            assert.ok([200, 404].includes(result.status), 'Test-file cleanup failed: ' + JSON.stringify(result.data));
+          }
+
+          async function cleanupOwnedFiles() {
+            if (!cookie || !csrf) return;
+            try {
+              const data = await listFiles();
+              for (const row of (data.files || [])) {
+                if (String(row.file_name || '').startsWith(prefix)) {
+                  await deleteFile(row.id);
+                }
+              }
+            } catch (error) {
+              console.error('WARNING: could not finish automatic API cleanup: ' + (error?.message || error));
+              process.exitCode = 1;
+            }
+          }
+
+          try {
+            const home = await fetch(base, { cache: 'no-store', redirect: 'manual' });
+            assert.equal(home.status, 200, 'Preview home page unavailable.');
+            const html = await home.text();
+            const appScript = html.match(/src=["']([^"']*app\.js[^"']*)["']/i);
+            assert.ok(appScript, 'Could not find the application script reference in the preview HTML.');
+            const appAsset = await fetch(new URL(appScript[1], base), { cache: 'no-store' });
+            assert.equal(appAsset.status, 200, 'Application script could not be loaded.');
+            const appSource = await appAsset.text();
+            assert.ok(appSource.includes('YOURZ PRODUCT FILE LIBRARY V1'), 'Product-file UI patch is missing from the preview asset.');
+            assert.ok(appSource.includes('Shared product files / 产品资料文件库'), 'Product-file panel is missing from the preview asset.');
+            assert.ok(appSource.includes('parseXlsxPreview'), 'Excel preview code is missing from the preview asset.');
+
+            const unauthenticated = await request('/api/files?page=1', { cookie: '' });
+            assert.equal(unauthenticated.status, 401, 'Unauthenticated file listing should be denied.');
+
+            const state = await request('/api/state', { cookie: '' });
+            assert.equal(state.status, 200, 'Preview state API failed: ' + JSON.stringify(state.data));
+            assert.equal(state.data.session?.role, 'editor', 'Test visitor did not receive the expected shared editor session.');
+            csrf = state.data.session?.csrf || '';
+            assert.ok(cookie.startsWith('__Host-factory-session='), 'Preview API did not issue a session cookie.');
+            assert.ok(csrf, 'Preview API did not return a CSRF token.');
+
+            const existing = await listFiles();
+            for (const row of (existing.files || [])) {
+              if (String(row.file_name || '').startsWith('YOURZ_R2_INTEGRATION_')) {
+                await deleteFile(row.id);
+              } else {
+                assert.fail('The isolated test D1 unexpectedly contains a non-test file record; refusing to remove unrelated metadata.');
+              }
+            }
+            const emptyAfterPriorCleanup = await listFiles();
+            assert.equal(emptyAfterPriorCleanup.total, 0, 'Test file list was not empty before the run.');
+
+            const nonce = Math.random().toString(36).slice(2, 10);
+            const files = [
+              { name: prefix + nonce + '.txt', type: 'text/plain; charset=utf-8', bytes: Buffer.from('YOURZ actual upload/read/delete test ' + nonce, 'utf8'), disposition: 'attachment' },
+              { name: prefix + nonce + '.png', type: 'image/png', bytes: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l1sAAAAASUVORK5CYII=', 'base64'), disposition: 'inline' }
+            ];
+
+            for (const file of files) {
+              const upload = await request('/api/files?name=' + encodeURIComponent(file.name), {
+                method: 'POST',
+                binary: file.bytes,
+                contentType: file.type
+              });
+              assert.equal(upload.status, 201, 'Real R2 upload failed for ' + file.name + ': ' + JSON.stringify(upload.data));
+              assert.equal(upload.data.file?.file_name, file.name);
+              assert.equal(upload.data.file?.size, file.bytes.byteLength);
+              assert.ok(upload.data.file?.id);
+              uploaded.push({ ...file, id: upload.data.file.id });
+            }
+
+            const listed = await listFiles();
+            assert.equal(listed.total, 2, 'Uploaded test records were not both present in the D1-backed file list.');
+            for (const file of uploaded) {
+              const meta = (listed.files || []).find(row => row.id === file.id);
+              assert.ok(meta, 'Uploaded file was missing from the shared listing: ' + file.name);
+              assert.equal(meta.size, file.bytes.byteLength);
+
+              const query = file.disposition === 'attachment' ? '?download=1' : '';
+              const content = await request('/api/files/' + encodeURIComponent(file.id) + '/content' + query);
+              assert.equal(content.status, 200, 'Cloud file read failed for ' + file.name + ': ' + JSON.stringify(content.data));
+              const actualBytes = Buffer.from(await content.response.arrayBuffer());
+              assert.deepEqual(actualBytes, file.bytes, 'Downloaded bytes differed from the uploaded file: ' + file.name);
+              assert.ok((content.response.headers.get('content-type') || '').startsWith(file.type.split(';')[0]));
+              const disposition = content.response.headers.get('content-disposition') || '';
+              assert.ok(disposition.startsWith(file.disposition), 'Unexpected Content-Disposition for ' + file.name + ': ' + disposition);
+            }
+
+            const afterContent = await listFiles();
+            assert.equal(afterContent.total, 2);
+            assert.ok(afterContent.totalBytes >= uploaded.reduce((sum, f) => sum + f.bytes.byteLength, 0));
+
+            for (const file of uploaded) await deleteFile(file.id);
+            uploaded = [];
+            const empty = await listFiles();
+            assert.equal(empty.total, 0, 'File metadata remained after deletion.');
+            assert.equal(empty.totalBytes, 0, 'Storage usage indicator was not reset after deletion.');
+            console.log('PASS: preview UI assets, no-session denial, editor upload, D1 metadata listing, real R2 byte-for-byte reads, inline image delivery, attachment download, deletion and post-delete storage accounting.');
+          } finally {
+            await cleanupOwnedFiles();
+          }
+          NODE
+
+          node /tmp/test-product-file-api.mjs
+
+      - name: Remove the temporary preview deployment (production is never selected)
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          PREVIEW_URL="https://$PREVIEW_BRANCH.$PROJECT_NAME.pages.dev"
+          LIST_HTTP="$(curl --silent --show-error --max-time 20 --output /tmp/pages-preview-deployments.json --write-out '%{http_code}'             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"             "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$PROJECT_NAME/deployments?env=preview&per_page=100")"
+          if [ "$LIST_HTTP" != "200" ]; then
+            echo "::warning::Could not list preview deployments for cleanup (HTTP $LIST_HTTP)."
+            exit 0
+          fi
+          DEPLOYMENT_ID="$(node -e '
+            const fs=require("node:fs");
+            const body=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+            const target=process.argv[2];
+            if(body.success!==true) process.exit(0);
+            const rows=Array.isArray(body.result)?body.result:[];
+            const found=rows.find(d=>d.environment==="preview" &&
+              ((Array.isArray(d.aliases)&&d.aliases.includes(target)) || d.url===target));
+            if(found?.id) process.stdout.write(String(found.id));
+          ' /tmp/pages-preview-deployments.json "$PREVIEW_URL")"
+          if [ -z "$DEPLOYMENT_ID" ]; then
+            echo "No matching temporary preview deployment found to remove."
+            rm -f /tmp/pages-preview-deployments.json
+            exit 0
+          fi
+          DELETE_HTTP="$(curl --silent --show-error --max-time 20 --output /tmp/pages-preview-delete.json --write-out '%{http_code}'             -X DELETE             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"             "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$PROJECT_NAME/deployments/$DEPLOYMENT_ID?force=true")"
+          node -e '
+            const fs=require("node:fs");
+            const http=process.argv[1];
+            let body={};try{body=JSON.parse(fs.readFileSync(process.argv[2],"utf8"));}catch{}
+            if((http==="200" || http==="202") && body.success===true) {
+              console.log("Temporary integration preview deployment removed.");
+            } else {
+              console.error("Preview cleanup could not be confirmed (HTTP "+http+"). Production deployment was not targeted.");
+              process.exit(1);
+            }
+          ' "$DELETE_HTTP" /tmp/pages-preview-delete.json
+          rm -f /tmp/pages-preview-deployments.json /tmp/pages-preview-delete.json /tmp/yourz-upload-preview-deploy.log /tmp/test-product-file-api.mjs
