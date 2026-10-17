@@ -81,7 +81,7 @@ if (!handler.includes('YOURZ_PRODUCT_FILES_SCHEMA_V1')) {
     '      }));',
     '      const fixedBody = new FixedLengthStream(size);',
     '      const uploadPromise = env.FILES.put(objectKey, fixedBody.readable, { httpMetadata:{ contentType }, customMetadata:{ fileId:id, uploadedBy:session.userId } });',
-    '      await Promise.all([uploadPromise, guardedBody.pipeTo(fixedBody.writable)]);'
+    '      await Promise.all([uploadPromise, guardedBody.pipeTo(fixedBody.writable)]);',
     '    } catch (error) {',
     '      try { await env.DB.prepare("DELETE FROM file_upload_reservations WHERE id=?").bind(id).run(); } catch { /* best-effort reservation cleanup */ }',
     "      console.error('[yourz] product file upload failed', String(error?.message || error).slice(0, 240));",
