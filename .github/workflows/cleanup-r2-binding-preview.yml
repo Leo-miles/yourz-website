@@ -1,0 +1,80 @@
+name: Clean up temporary YOURZ R2 binding smoke preview
+
+on:
+  push:
+    branches:
+      - test/cleanup-r2-binding-preview
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup-preview:
+    name: Remove only the temporary R2 binding preview deployment
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      PROJECT_NAME: yourz-website
+      TARGET_ALIAS: https://r2-binding-smoke.yourz-website.pages.dev
+
+    steps:
+      - name: Verify credentials are configured
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo "::error::Cloudflare token is missing; nothing was deleted."; exit 1; }
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo "::error::Cloudflare account ID is missing; nothing was deleted."; exit 1; }
+
+      - name: Find the exact temporary preview deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          HTTP_CODE="$(curl --silent --show-error --max-time 20 --output /tmp/r2-smoke-deployments.json --write-out '%{http_code}'             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"             "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$PROJECT_NAME/deployments?env=preview&per_page=25")"
+          node -e '
+            const fs=require("node:fs");
+            const http=process.argv[1];
+            const file=process.argv[2];
+            const alias=process.argv[3];
+            let body={};try{body=JSON.parse(fs.readFileSync(file,"utf8"));}catch{}
+            if(http!=="200" || body.success!==true) {
+              console.error("Could not safely list preview deployments (HTTP "+http+"); nothing was deleted.");
+              process.exit(1);
+            }
+            const rows=Array.isArray(body.result)?body.result:[];
+            const found=rows.find(d=>d.environment==="preview" &&
+              (Array.isArray(d.aliases) && d.aliases.includes(alias) || d.url===alias));
+            if(!found?.id) {
+              console.log("No deployment with the exact temporary alias was found; nothing was deleted.");
+              process.exit(0);
+            }
+            fs.writeFileSync("/tmp/r2-smoke-deployment-id.txt",String(found.id));
+            console.log("Found the exact temporary R2-binding preview deployment. No production deployment matched.");
+          ' "$HTTP_CODE" /tmp/r2-smoke-deployments.json "$TARGET_ALIAS"
+
+      - name: Delete only the exact temporary R2 binding preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -s /tmp/r2-smoke-deployment-id.txt ]; then
+            echo "No matching preview deployment requires cleanup."
+            exit 0
+          fi
+          DEPLOYMENT_ID="$(cat /tmp/r2-smoke-deployment-id.txt)"
+          DELETE_HTTP="$(curl --silent --show-error --max-time 20 --output /tmp/r2-smoke-delete.json --write-out '%{http_code}'             -X DELETE             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"             "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$PROJECT_NAME/deployments/$DEPLOYMENT_ID?force=true")"
+          node -e '
+            const fs=require("node:fs");
+            const http=process.argv[1];
+            let body={};try{body=JSON.parse(fs.readFileSync(process.argv[2],"utf8"));}catch{}
+            if((http==="200" || http==="202") && body.success===true) {
+              console.log("Temporary R2-binding preview deployment removed. R2 bucket and production resources were not changed.");
+            } else {
+              console.error("Could not confirm cleanup (HTTP "+http+"). No production deployment was targeted.");
+              process.exit(1);
+            }
+          ' "$DELETE_HTTP" /tmp/r2-smoke-delete.json
+
+      - name: Remove temporary lookup output
+        if: always()
+        run: rm -f /tmp/r2-smoke-deployments.json /tmp/r2-smoke-deployment-id.txt /tmp/r2-smoke-delete.json
