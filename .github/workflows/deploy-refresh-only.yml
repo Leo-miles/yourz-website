@@ -25,6 +25,7 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       PROJECT_NAME: yourz-website
       DATABASE_NAME: yourz-factory-db
+      R2_BUCKET_NAME: yourz-product-files
 
     steps:
       - name: Checkout repository
@@ -76,12 +77,15 @@ jobs:
           mkdir -p app
           tar -xJf yourz-runtime.tar.xz -C app
 
+          # The file-preview archive parser is vendored locally; install it only in the temporary build workspace.
+          npm install --prefix app --no-save --package-lock=false jszip@3.10.1
+
           # Preserve the exact production transformations already used by the existing pipeline.
           node deploy-fixes/enable-admin-diagnostics.mjs app/src/handler.js
           node deploy-fixes/enable-public-entry.mjs app
           node deploy-fixes/add-yourz-favicon.mjs app
 
-          # This is the only new front-end patch: no cloud-drive/audit changes are included.
+          # This build applies the refresh, safe supplier JSON import, and shared product-file library patches; it contains no unrelated cloud-drive/audit changes.
           node .github/scripts/fix-load-latest.mjs app
           node --check app/public/app.js
           cd app
@@ -118,6 +122,18 @@ jobs:
           echo "DB_ID=$DB_ID" >> "$GITHUB_ENV"
           echo "Found the existing production D1 database; no database creation or reset was performed."
 
+      - name: Verify the dedicated R2 bucket exists (never create or replace it)
+        working-directory: app
+        shell: bash
+        run: |
+          set -euo pipefail
+          wrangler r2 bucket list 2>&1 | tee /tmp/r2-list.txt
+          if ! grep -Fq "$R2_BUCKET_NAME" /tmp/r2-list.txt; then
+            echo "::error::Required existing R2 bucket '$R2_BUCKET_NAME' was not found or could not be listed. Deployment stopped before publishing. Create/verify the bucket in Cloudflare Dashboard first; this workflow never creates storage resources."
+            exit 1
+          fi
+          echo "Found the dedicated R2 bucket '$R2_BUCKET_NAME'. No R2 resource was created or changed."
+
       - name: Configure the existing production D1 binding
         working-directory: app
         shell: bash
@@ -134,6 +150,10 @@ jobs:
           binding = "DB"
           database_name = "yourz-factory-db"
           database_id = "$DB_ID"
+
+          [[r2_buckets]]
+          binding = "FILES"
+          bucket_name = "$R2_BUCKET_NAME"
           EOF
 
       - name: Deploy refresh-only build to the existing production branch
@@ -156,20 +176,23 @@ jobs:
           echo "Production health check passed."
 
           # Validate the immutable deployment URL first, independent of custom-domain edge caches.
-          DEPLOY_INDEX_HTTP="$(curl --silent --show-error --location --max-time 30 --output /tmp/deploy-index.html --write-out '%{http_code}' -H 'Cache-Control: no-cache' "$DEPLOY_URL/?v=yourz-refresh-20261016-2" || true)"
-          DEPLOY_ASSET_HTTP="$(curl --silent --show-error --location --max-time 30 --output /tmp/deploy-app.js --write-out '%{http_code}' -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' "$DEPLOY_URL/app.js?v=yourz-refresh-20261016-2" || true)"
+          DEPLOY_INDEX_HTTP="$(curl --silent --show-error --location --max-time 30 --output /tmp/deploy-index.html --write-out '%{http_code}' -H 'Cache-Control: no-cache' "$DEPLOY_URL/?v=yourz-refresh-20261016-3-files-20261016-2" || true)"
+          DEPLOY_ASSET_HTTP="$(curl --silent --show-error --location --max-time 30 --output /tmp/deploy-app.js --write-out '%{http_code}' -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' "$DEPLOY_URL/app.js?v=yourz-refresh-20261016-3-files-20261016-2" || true)"
           node - "$DEPLOY_INDEX_HTTP" /tmp/deploy-index.html "$DEPLOY_ASSET_HTTP" /tmp/deploy-app.js <<'NODE'
           const fs = require('node:fs');
           const indexStatus = process.argv[2];
           const html = fs.readFileSync(process.argv[3], 'utf8');
           const assetStatus = process.argv[4];
           const source = fs.readFileSync(process.argv[5], 'utf8');
-          const markers = ['app.js?v=yourz-refresh-20261016-2'];
+          const markers = ['app.js?v=yourz-refresh-20261016-3&safe-import=20261016-1&files-v1=20261016-2'];
           const refreshMarkers = [
             "cache:'no-store'",
             'Loaded latest data / 已载入最新资料',
             "button.setAttribute('aria-busy','true')",
-            'Loading latest… / 正在载入…'
+            'Loading latest… / 正在载入…',
+            'YOURZ PRODUCT FILE LIBRARY V1',
+            'Shared product files / 产品资料文件库',
+            'parseXlsxPreview'
           ];
           if (indexStatus !== '200' || !markers.every(item => html.includes(item))) {
             console.error('Immutable deployment HTML does not reference the versioned refresh script.');
@@ -183,15 +206,15 @@ jobs:
           NODE
 
           # Re-read the custom domain using a versioned URL to avoid the old unversioned app.js cache.
-          DOMAIN_INDEX_HTTP="$(curl --silent --show-error --location --max-time 30 --output /tmp/yourz-index.html --write-out '%{http_code}' -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' "https://yourz.top/?v=yourz-refresh-20261016-2" || true)"
-          DOMAIN_ASSET_HTTP="$(curl --silent --show-error --location --max-time 30 --output /tmp/yourz-app.js --write-out '%{http_code}' -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' "https://yourz.top/app.js?v=yourz-refresh-20261016-2" || true)"
+          DOMAIN_INDEX_HTTP="$(curl --silent --show-error --location --max-time 30 --output /tmp/yourz-index.html --write-out '%{http_code}' -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' "https://yourz.top/?v=yourz-refresh-20261016-3-files-20261016-2" || true)"
+          DOMAIN_ASSET_HTTP="$(curl --silent --show-error --location --max-time 30 --output /tmp/yourz-app.js --write-out '%{http_code}' -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' "https://yourz.top/app.js?v=yourz-refresh-20261016-3-files-20261016-2" || true)"
           node - "$DOMAIN_INDEX_HTTP" /tmp/yourz-index.html "$DOMAIN_ASSET_HTTP" /tmp/yourz-app.js <<'NODE'
           const fs = require('node:fs');
           const indexStatus = process.argv[2];
           const html = fs.readFileSync(process.argv[3], 'utf8');
           const assetStatus = process.argv[4];
           const source = fs.readFileSync(process.argv[5], 'utf8');
-          const markers = ['app.js?v=yourz-refresh-20261016-2'];
+          const markers = ['app.js?v=yourz-refresh-20261016-3&safe-import=20261016-1&files-v1=20261016-2'];
           const refreshMarkers = [
             "cache:'no-store'",
             'Loaded latest data / 已载入最新资料',
