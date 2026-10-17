@@ -79,7 +79,7 @@ if (!handler.includes('YOURZ_PRODUCT_FILES_SCHEMA_V1')) {
     '        transform(chunk, controller) { streamedSize += chunk.byteLength; if (streamedSize > MAX_PRODUCT_FILE_BYTES) throw new Error("Upload exceeds the file size limit"); controller.enqueue(chunk); },',
     '        flush() { if (streamedSize !== size) throw new Error("Upload size did not match the declared size"); }',
     '      }));',
-    '      const fixedBody = new FixedLengthStream(size);',
+    '      const fixedBody = typeof FixedLengthStream === "function" ? new FixedLengthStream(size) : new TransformStream();',
     '      const uploadPromise = env.FILES.put(objectKey, fixedBody.readable, { httpMetadata:{ contentType }, customMetadata:{ fileId:id, uploadedBy:session.userId } });',
     '      await Promise.all([uploadPromise, guardedBody.pipeTo(fixedBody.writable)]);',
     '    } catch (error) {',
