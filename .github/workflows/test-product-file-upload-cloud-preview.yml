@@ -184,14 +184,27 @@ jobs:
         run: |
           set -euo pipefail
           wrangler pages deploy ./public --project-name "$PROJECT_NAME" --branch "$PREVIEW_BRANCH" --commit-dirty=true 2>&1 | tee /tmp/yourz-upload-preview-deploy.log
-          echo "Uploaded the integration fixture to preview branch '$PREVIEW_BRANCH'; production branch and custom domain were not targeted."
+          DEPLOY_URL="$(grep -Eo 'https://[a-zA-Z0-9-]+\\.yourz-website\\.pages\\.dev' /tmp/yourz-upload-preview-deploy.log | head -n 1)"
+          test -n "$DEPLOY_URL" || { echo "::error::Could not resolve the immutable preview deployment URL."; exit 1; }
+          echo "PREVIEW_URL=$DEPLOY_URL" >> "$GITHUB_ENV"
+          echo "Uploaded the integration fixture to preview branch '$PREVIEW_BRANCH'; testing will use its immutable URL. Production branch and custom domain were not targeted."
 
       - name: Exercise the real product-file API against staging D1 and the actual R2 bucket
         shell: bash
         env:
-          PREVIEW_URL: https://file-upload-smoke.yourz-website.pages.dev
         run: |
           set -euo pipefail
+          test -n "$PREVIEW_URL" || { echo "::error::Missing immutable preview URL."; exit 1; }
+          CODE=""
+          for attempt in $(seq 1 24); do
+            CODE="$(curl --silent --show-error --max-time 10 --output /tmp/preview-home.html --write-out '%{http_code}' "$PREVIEW_URL/" 2>/dev/null || true)"
+            if [ "$CODE" = "200" ]; then break; fi
+            sleep 5
+          done
+          if [ "$CODE" != "200" ]; then
+            echo "::error::Immutable preview URL was not ready (HTTP '$CODE'); no production deployment was attempted."
+            exit 1
+          fi
           cat > /tmp/test-product-file-api.mjs <<'NODE'
           import assert from 'node:assert/strict';
           import { readFile } from 'node:fs/promises';
