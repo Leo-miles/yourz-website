@@ -1,0 +1,85 @@
+name: Preflight Cloudflare R2 prerequisites (read-only)
+
+on:
+  push:
+    branches:
+      - test/product-file-upload-v1
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      EXPECTED_BUCKET: yourz-product-files
+      PROJECT_NAME: yourz-website
+    steps:
+      - name: Verify required secret configuration and token status
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo "::error::CLOUDFLARE_API_TOKEN is not configured; no production changes were made."; exit 1; }
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo "::error::CLOUDFLARE_ACCOUNT_ID is not configured; no production changes were made."; exit 1; }
+          HTTP="$(curl --silent --show-error --max-time 20 --output /tmp/cf-token-verify.json --write-out '%{http_code}' -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" https://api.cloudflare.com/client/v4/user/tokens/verify)"
+          python - "$HTTP" /tmp/cf-token-verify.json <<'PY'
+          import json, sys
+          http = sys.argv[1]
+          with open(sys.argv[2], encoding="utf-8") as f:
+              body = json.load(f)
+          if http != "200" or body.get("success") is not True or (body.get("result") or {}).get("status") != "active":
+              print("Cloudflare token verification failed; no production changes were made.")
+              for error in body.get("errors", []):
+                  print("Cloudflare error:", error.get("code", "unknown"), str(error.get("message", ""))[:200])
+              raise SystemExit(1)
+          print("Cloudflare API token is active.")
+          PY
+      - name: Verify the existing R2 bucket (read-only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          HTTP="$(curl --silent --show-error --max-time 20 --output /tmp/cf-r2-buckets.json --write-out '%{http_code}' -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/r2/buckets?per_page=1000")"
+          python - "$HTTP" /tmp/cf-r2-buckets.json "$EXPECTED_BUCKET" <<'PY'
+          import json, sys
+          http, path, expected = sys.argv[1:]
+          with open(path, encoding="utf-8") as f:
+              body = json.load(f)
+          if http != "200" or body.get("success") is not True:
+              print("Unable to list R2 buckets with the configured token; no production changes were made.")
+              for error in body.get("errors", []):
+                  print("Cloudflare error:", error.get("code", "unknown"), str(error.get("message", ""))[:200])
+              raise SystemExit(1)
+          result = body.get("result") or []
+          if isinstance(result, dict):
+              buckets = result.get("buckets") or []
+          else:
+              buckets = result
+          names = [str(item.get("name", "")) for item in buckets if isinstance(item, dict)]
+          if expected not in names:
+              print(f"Required bucket '{expected}' was not found in the readable bucket list; no production changes were made.")
+              print("Visible bucket count:", len(names))
+              raise SystemExit(1)
+          print(f"Required existing R2 bucket '{expected}' is present.")
+          PY
+      - name: Verify the existing Pages project can be read (read-only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          HTTP="$(curl --silent --show-error --max-time 20 --output /tmp/cf-pages-project.json --write-out '%{http_code}' -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$PROJECT_NAME")"
+          python - "$HTTP" /tmp/cf-pages-project.json "$PROJECT_NAME" <<'PY'
+          import json, sys
+          http, path, expected = sys.argv[1:]
+          with open(path, encoding="utf-8") as f:
+              body = json.load(f)
+          project = body.get("result") or {}
+          if http != "200" or body.get("success") is not True or project.get("name") != expected:
+              print(f"Unable to verify existing Pages project '{expected}' with the configured token.")
+              for error in body.get("errors", []):
+                  print("Cloudflare error:", error.get("code", "unknown"), str(error.get("message", ""))[:200])
+              raise SystemExit(1)
+          print(f"Existing Pages project '{expected}' is readable.")
+          print("Production branch:", project.get("production_branch") or "(not returned)")
+          PY
