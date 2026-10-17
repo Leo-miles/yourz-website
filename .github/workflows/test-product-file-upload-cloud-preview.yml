@@ -191,7 +191,6 @@ jobs:
 
       - name: Exercise the real product-file API against staging D1 and the actual R2 bucket
         shell: bash
-        env:
         run: |
           set -euo pipefail
           test -n "$PREVIEW_URL" || { echo "::error::Missing immutable preview URL."; exit 1; }
