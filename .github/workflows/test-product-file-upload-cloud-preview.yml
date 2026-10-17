@@ -142,6 +142,17 @@ jobs:
           }
           EOF
           node --check app/functions/_middleware.js
+          # This diagnostic is applied only to the temporary preview build and is protected by the random API gate.
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const path = 'app/src/handler.js';
+          let source = fs.readFileSync(path, 'utf8');
+          const before = "fail(502, 'Cloud file storage failed. No file record was added; please retry. / 云端文件保存失败，未添加文件记录，请重试');";
+          const after = "fail(502, 'Cloud file storage failed: ' + String(error?.message || error).slice(0, 180));";
+          if (!source.includes(before)) throw new Error('Could not find temporary-only upload diagnostic insertion point.');
+          fs.writeFileSync(path, source.replace(before, after));
+          NODE
+          node --check app/src/handler.js
           echo "Preview API gate created with a one-run random key; it is not committed to the repository."
 
       - name: Configure only the preview environment with staging D1 and existing R2
