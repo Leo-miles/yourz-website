@@ -1,0 +1,186 @@
+name: Isolated YOURZ R2 binding smoke test
+
+on:
+  push:
+    branches:
+      - test/cloudflare-r2-binding-smoke
+
+permissions:
+  contents: read
+
+jobs:
+  r2-preview-smoke:
+    name: Deploy an isolated preview and test real R2 put/get/delete
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      PROJECT_NAME: yourz-website
+      PREVIEW_BRANCH: r2-binding-smoke
+      BUCKET_NAME: yourz-product-files
+    steps:
+      - name: Confirm required Cloudflare credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo "::error::Cloudflare token missing; no deployment attempted."; exit 1; }
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo "::error::Cloudflare account ID missing; no deployment attempted."; exit 1; }
+          HTTP_CODE="$(curl --silent --show-error --max-time 20 --output /tmp/cf-token-verify.json --write-out '%{http_code}' -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" https://api.cloudflare.com/client/v4/user/tokens/verify)"
+          node -e '
+            const fs = require("node:fs");
+            let body = {};
+            try { body = JSON.parse(fs.readFileSync(process.argv[2], "utf8")); } catch {}
+            if (process.argv[1] !== "200" || body.success !== true || body.result?.status !== "active") {
+              console.error("Cloudflare token verification failed; no deployment attempted.");
+              process.exit(1);
+            }
+            console.log("Cloudflare token is active.");
+          ' "$HTTP_CODE" /tmp/cf-token-verify.json
+          rm -f /tmp/cf-token-verify.json
+
+      - name: Build R2-only preview fixture and bind the existing bucket
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/yourz-r2-smoke/public
+          SMOKE_KEY="$(openssl rand -hex 32)"
+          SMOKE_NONCE="$(openssl rand -hex 12)"
+          echo "::add-mask::$SMOKE_KEY"
+          export SMOKE_KEY SMOKE_NONCE
+
+          cat > /tmp/yourz-r2-smoke/worker.template.js <<'WORKER'
+          const SMOKE_KEY = "__SMOKE_KEY__";
+          const SMOKE_NONCE = "__SMOKE_NONCE__";
+
+          function reply(status, body) {
+            return new Response(JSON.stringify(body), {
+              status,
+              headers: {
+                "content-type": "application/json; charset=utf-8",
+                "cache-control": "no-store",
+                "x-content-type-options": "nosniff"
+              }
+            });
+          }
+
+          export default {
+            async fetch(request, env) {
+              const url = new URL(request.url);
+              if (url.pathname === "/" && request.method === "GET") {
+                return new Response("YOURZ isolated R2 binding preview is ready.\n", {
+                  headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" }
+                });
+              }
+              if (url.pathname !== "/__r2_smoke" || request.method !== "POST") {
+                return new Response("Not found", { status: 404 });
+              }
+              if (request.headers.get("X-YOURZ-R2-SMOKE") !== SMOKE_KEY ||
+                  url.searchParams.get("nonce") !== SMOKE_NONCE) {
+                return new Response("Not found", { status: 404 });
+              }
+              if (!env.FILES) return reply(500, { ok: false, error: "FILES binding is missing" });
+
+              const key = "__yourz_smoke__/r2-" + SMOKE_NONCE + ".txt";
+              const payload = "YOURZ R2 binding smoke test " + SMOKE_NONCE;
+              const checks = { put: false, get: false, delete: false };
+              try {
+                await env.FILES.put(key, payload, {
+                  httpMetadata: { contentType: "text/plain; charset=utf-8" }
+                });
+                checks.put = true;
+                const object = await env.FILES.get(key);
+                if (!object) throw new Error("Stored object could not be read");
+                checks.get = (await object.text()) === payload;
+              } catch {
+                // Keep internal Cloudflare errors and runtime details out of the public response.
+              } finally {
+                try {
+                  await env.FILES.delete(key);
+                  checks.delete = (await env.FILES.get(key)) === null;
+                } catch {
+                  checks.delete = false;
+                }
+              }
+              const ok = Object.values(checks).every(Boolean);
+              return reply(ok ? 200 : 500, {
+                ok,
+                checks,
+                note: ok ? "R2 put/get/delete passed; test object removed." : "R2 integration check failed; review the private workflow logs."
+              });
+            }
+          };
+          WORKER
+
+          node -e '
+            const fs = require("node:fs");
+            let source = fs.readFileSync("/tmp/yourz-r2-smoke/worker.template.js", "utf8");
+            source = source.replace("__SMOKE_KEY__", process.env.SMOKE_KEY).replace("__SMOKE_NONCE__", process.env.SMOKE_NONCE);
+            fs.writeFileSync("/tmp/yourz-r2-smoke/public/_worker.js", source);
+            fs.writeFileSync("/tmp/yourz-r2-smoke/public/index.html", "<!doctype html><meta charset=utf-8><title>YOURZ R2 preview</title><h1>YOURZ isolated R2 binding preview</h1><p>Temporary integration-check deployment. No production database is configured in this fixture.</p>");
+          '
+
+          cat > /tmp/yourz-r2-smoke/wrangler.toml <<EOF
+          name = "yourz-website"
+          pages_build_output_dir = "./public"
+          compatibility_date = "2026-10-17"
+          compatibility_flags = ["nodejs_compat"]
+          send_metrics = false
+
+          [[r2_buckets]]
+          binding = "FILES"
+          bucket_name = "$BUCKET_NAME"
+          EOF
+
+          node --check /tmp/yourz-r2-smoke/public/_worker.js
+          echo "Prepared a preview-only Worker with only the FILES R2 binding; no D1 binding is configured."
+
+      - name: Deploy only the preview branch (never main or the custom domain)
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global wrangler@4
+          cd /tmp/yourz-r2-smoke
+          wrangler pages deploy ./public --project-name "$PROJECT_NAME" --branch "$PREVIEW_BRANCH" --commit-dirty=true 2>&1 | tee /tmp/yourz-r2-preview-deploy.log
+          echo "Preview deployment requested for branch '$PREVIEW_BRANCH'; production branch remains unchanged."
+
+      - name: Test real R2 binding using one temporary object
+        shell: bash
+        run: |
+          set -euo pipefail
+          PREVIEW_URL="https://$PREVIEW_BRANCH.$PROJECT_NAME.pages.dev"
+          SMOKE_NONCE="$(openssl rand -hex 12)"
+          # The worker uses the run-specific nonce rendered into it during build.
+          # Extract the embedded nonce from the temporary build file without printing the embedded key.
+          WORKER="/tmp/yourz-r2-smoke/public/_worker.js"
+          EMBEDDED_NONCE="$(node -e 'const fs=require("node:fs");const s=fs.readFileSync(process.argv[1],"utf8");const m=s.match(/const SMOKE_NONCE = "([a-f0-9]{24})";/);if(!m)process.exit(1);process.stdout.write(m[1])' "$WORKER")"
+          SMOKE_KEY="$(node -e 'const fs=require("node:fs");const s=fs.readFileSync(process.argv[1],"utf8");const m=s.match(/const SMOKE_KEY = "([a-f0-9]{64})";/);if(!m)process.exit(1);process.stdout.write(m[1])' "$WORKER")"
+          echo "::add-mask::$SMOKE_KEY"
+
+          CODE=""
+          for attempt in $(seq 1 24); do
+            CODE="$(curl --silent --show-error --max-time 10 --output /tmp/yourz-r2-preview-home.txt --write-out '%{http_code}' "$PREVIEW_URL/" 2>/dev/null || true)"
+            if [ "$CODE" = "200" ]; then break; fi
+            sleep 5
+          done
+          if [ "$CODE" != "200" ]; then
+            echo "::error::R2 preview URL was not ready (HTTP '$CODE'). No production deployment was attempted."
+            exit 1
+          fi
+
+          CODE="$(curl --silent --show-error --max-time 30 --output /tmp/yourz-r2-smoke-result.json --write-out '%{http_code}'             -X POST             -H "X-YOURZ-R2-SMOKE: $SMOKE_KEY"             "$PREVIEW_URL/__r2_smoke?nonce=$EMBEDDED_NONCE" || true)"
+          node -e '
+            const fs = require("node:fs");
+            let body = {};
+            try { body = JSON.parse(fs.readFileSync("/tmp/yourz-r2-smoke-result.json", "utf8")); } catch {}
+            const http = process.argv[1];
+            if (http !== "200" || body.ok !== true ||
+                body.checks?.put !== true || body.checks?.get !== true || body.checks?.delete !== true) {
+              console.error("R2 binding smoke test failed (HTTP " + http + "). Details: " + JSON.stringify(body));
+              process.exit(1);
+            }
+            console.log("PASS: actual preview FILES binding completed R2 put/get/delete; temporary test object was removed.");
+          ' "$CODE"
+
+          # A separately deployed R2-only Worker never has a production D1 binding and this workflow never points at yourz.top.
+          rm -f /tmp/yourz-r2-preview-deploy.log /tmp/yourz-r2-preview-home.txt /tmp/yourz-r2-smoke-result.json
