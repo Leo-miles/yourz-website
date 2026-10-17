@@ -79,7 +79,9 @@ if (!handler.includes('YOURZ_PRODUCT_FILES_SCHEMA_V1')) {
     '        transform(chunk, controller) { streamedSize += chunk.byteLength; if (streamedSize > MAX_PRODUCT_FILE_BYTES) throw new Error("Upload exceeds the file size limit"); controller.enqueue(chunk); },',
     '        flush() { if (streamedSize !== size) throw new Error("Upload size did not match the declared size"); }',
     '      }));',
-    '      await env.FILES.put(objectKey, guardedBody, { httpMetadata:{ contentType }, customMetadata:{ fileId:id, uploadedBy:session.userId } });',
+    '      const fixedBody = new FixedLengthStream(size);',
+    '      const uploadPromise = env.FILES.put(objectKey, fixedBody.readable, { httpMetadata:{ contentType }, customMetadata:{ fileId:id, uploadedBy:session.userId } });',
+    '      await Promise.all([uploadPromise, guardedBody.pipeTo(fixedBody.writable)]);'
     '    } catch (error) {',
     '      try { await env.DB.prepare("DELETE FROM file_upload_reservations WHERE id=?").bind(id).run(); } catch { /* best-effort reservation cleanup */ }',
     "      console.error('[yourz] product file upload failed', String(error?.message || error).slice(0, 240));",
