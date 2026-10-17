@@ -184,7 +184,7 @@ jobs:
         run: |
           set -euo pipefail
           wrangler pages deploy ./public --project-name "$PROJECT_NAME" --branch "$PREVIEW_BRANCH" --commit-dirty=true 2>&1 | tee /tmp/yourz-upload-preview-deploy.log
-          DEPLOY_URL="$(grep -Eo 'https://[a-zA-Z0-9-]+\\.yourz-website\\.pages\\.dev' /tmp/yourz-upload-preview-deploy.log | head -n 1)"
+          DEPLOY_URL="$(grep -Eo 'https://[a-zA-Z0-9-]+[.]yourz-website[.]pages[.]dev' /tmp/yourz-upload-preview-deploy.log | head -n 1)"
           test -n "$DEPLOY_URL" || { echo "::error::Could not resolve the immutable preview deployment URL."; exit 1; }
           echo "PREVIEW_URL=$DEPLOY_URL" >> "$GITHUB_ENV"
           echo "Uploaded the integration fixture to preview branch '$PREVIEW_BRANCH'; testing will use its immutable URL. Production branch and custom domain were not targeted."
