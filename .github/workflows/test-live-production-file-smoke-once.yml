@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   smoke:
-    if: github.event.head_commit.message == 'test: trigger production upload smoke once'
+    if: "github.event.head_commit.message == 'test: trigger production upload smoke once'"
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
