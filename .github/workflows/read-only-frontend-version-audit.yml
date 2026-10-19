@@ -1,0 +1,91 @@
+name: Read-only YOURZ frontend version audit
+
+on:
+  push:
+    branches:
+      - test/live-production-file-smoke-20261019
+    paths:
+      - ".github/workflows/read-only-frontend-version-audit.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Read live HTML and JavaScript without making any writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          const base = 'https://yourz.top';
+          const suffix = 'version-audit-20261019';
+          const get = async url => {
+            const response = await fetch(url, {
+              headers: { 'Cache-Control':'no-cache, no-store, max-age=0', 'Pragma':'no-cache', 'User-Agent':'YOURZ-read-only-version-audit' },
+              cache: 'no-store',
+              redirect: 'follow'
+            });
+            const body = await response.text();
+            console.log('URL:', url);
+            console.log('HTTP:', response.status, response.statusText);
+            console.log('Final URL:', response.url);
+            console.log('Content-Type:', response.headers.get('content-type') || '(none)');
+            console.log('Cache headers:', JSON.stringify({
+              age: response.headers.get('age'),
+              cfCacheStatus: response.headers.get('cf-cache-status'),
+              etag: response.headers.get('etag'),
+              lastModified: response.headers.get('last-modified'),
+              cacheControl: response.headers.get('cache-control')
+            }));
+            return { response, body };
+          };
+          const home = await get(base + '/?audit=' + suffix);
+          if (!home.response.ok) throw new Error('Homepage HTTP check failed.');
+          const html = home.body;
+          const scripts = [...html.matchAll(/<script\b[^>]*\bsrc\s*=\s*["']([^"']+)["'][^>]*>/gi)].map(m=>m[1]);
+          console.log('Script src references:', JSON.stringify(scripts));
+          console.log('HTML markers:', JSON.stringify({
+            expectedVersion: html.includes('app.js?v=yourz-refresh-20261016-3&safe-import=20261016-1&files-v1=20261016-2'),
+            refreshV2: html.includes('yourz-refresh-20261016-2'),
+            refreshV3: html.includes('yourz-refresh-20261016-3'),
+            safeImportMarker: html.includes('safe-import=20261016-1'),
+            fileLibraryMarker: html.includes('files-v1=20261016-2'),
+            ampEncoded: html.includes('&amp;safe-import='),
+            connectingStaticText: html.includes('Connecting / 正在连接')
+          }));
+          const candidates = scripts.filter(s=>/app\.js(?:\?|$)/i.test(s));
+          if (candidates.length) {
+            for (const candidate of candidates) {
+              const url = new URL(candidate, home.response.url);
+              url.searchParams.set('audit', suffix);
+              const asset = await get(url.toString());
+              const js = asset.body;
+              console.log('Asset markers for', url.pathname, JSON.stringify({
+                productFileLibrary: js.includes('YOURZ PRODUCT FILE LIBRARY V1'),
+                sharedProductFiles: js.includes('Shared product files / 产品资料文件库'),
+                refreshNoStore: js.includes("cache:'no-store'"),
+                loadedLatestFeedback: js.includes('Loaded latest data / 已载入最新资料'),
+                uploadApiRoute: js.includes('/api/files'),
+                length: js.length
+              }));
+            }
+          } else {
+            console.log('NO_APP_JS_SCRIPT_REFERENCE_FOUND');
+          }
+          const assetDirect = await get(base + '/app.js?audit=' + suffix);
+          console.log('Direct /app.js markers:', JSON.stringify({
+            productFileLibrary: assetDirect.body.includes('YOURZ PRODUCT FILE LIBRARY V1'),
+            sharedProductFiles: assetDirect.body.includes('Shared product files / 产品资料文件库'),
+            refreshNoStore: assetDirect.body.includes("cache:'no-store'"),
+            loadedLatestFeedback: assetDirect.body.includes('Loaded latest data / 已载入最新资料'),
+            uploadApiRoute: assetDirect.body.includes('/api/files'),
+            length: assetDirect.body.length
+          }));
+          console.log('READ_ONLY_ONLY: no writes, deploys, API mutations, or database queries were performed.');
+          NODE
