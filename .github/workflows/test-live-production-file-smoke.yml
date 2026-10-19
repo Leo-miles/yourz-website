@@ -1,0 +1,177 @@
+name: One-time YOURZ live upload API smoke test
+
+on:
+  push:
+    branches:
+      - test/live-production-file-smoke-20261019
+    paths:
+      - ".github/workflows/test-live-production-file-smoke.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    if: contains(github.event.head_commit.added, '.github/workflows/test-live-production-file-smoke.yml')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Exercise exactly one temporary file against the live production API
+        env:
+          TARGET_URL: https://yourz.top
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          import assert from 'node:assert/strict';
+
+          const base = new URL(process.env.TARGET_URL || '');
+          assert.equal(base.origin, 'https://yourz.top', 'Refusing to write outside the explicit live-site target.');
+          const suffix = Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+          const testName = 'ZZ_YOURZ_PRODUCTION_SMOKE_' + suffix + '.txt';
+          const bytes = Buffer.from('YOURZ controlled production upload/read/download/delete smoke test. Temporary file only.\n', 'utf8');
+          let cookie = '';
+          let csrf = '';
+          let fileId = '';
+          let baselineBytes = null;
+          let finalBytes = null;
+          let uploadCreated = false;
+          let cleanupOk = true;
+
+          async function readBody(response) {
+            const bytes = Buffer.from(await response.arrayBuffer());
+            let data = null;
+            try { data = JSON.parse(bytes.toString('utf8')); } catch {}
+            return { status: response.status, headers: response.headers, bytes, data };
+          }
+          function requireOk(condition, message) {
+            if (!condition) throw new Error(message);
+          }
+          async function api(path, options = {}) {
+            const headers = new Headers(options.headers || {});
+            headers.set('Accept', 'application/json');
+            if (cookie) headers.set('Cookie', cookie);
+            if (options.write) {
+              headers.set('Origin', base.origin);
+              headers.set('X-CSRF-Token', csrf);
+            }
+            return readBody(await fetch(new URL(path, base), {
+              method: options.method || 'GET',
+              headers,
+              body: options.body,
+              redirect: 'manual',
+              cache: 'no-store'
+            }));
+          }
+          async function getList() {
+            const response = await api('/api/files?page=1');
+            requireOk(response.status === 200 && response.data && Array.isArray(response.data.files),
+              'File-list API failed: HTTP ' + response.status + ' ' + JSON.stringify(response.data));
+            return response.data;
+          }
+          async function deleteExactTestFile(id) {
+            requireOk(typeof id === 'string' && id.length > 0, 'Refusing cleanup without an exact test-file ID.');
+            const list = await getList();
+            const row = list.files.find(f => f.id === id && f.file_name === testName);
+            if (!row) return false;
+            const response = await api('/api/files/' + encodeURIComponent(id), {
+              method: 'DELETE',
+              write: true,
+              headers: { 'Content-Type': 'application/json' },
+              body: '{}'
+            });
+            requireOk(response.status === 200 && response.data?.ok === true,
+              'Cleanup delete failed for the exact temporary file: HTTP ' + response.status + ' ' + JSON.stringify(response.data));
+            return true;
+          }
+
+          try {
+            const stateResponse = await readBody(await fetch(new URL('/api/state', base), {
+              headers: { Accept: 'application/json', 'Cache-Control': 'no-store' },
+              redirect: 'manual',
+              cache: 'no-store'
+            }));
+            requireOk(stateResponse.status === 200 && stateResponse.data?.session,
+              'Could not get the public shared session: HTTP ' + stateResponse.status + ' ' + JSON.stringify(stateResponse.data));
+            const setCookieValues = typeof stateResponse.headers.getSetCookie === 'function'
+              ? stateResponse.headers.getSetCookie().join('; ')
+              : (stateResponse.headers.get('set-cookie') || '');
+            cookie = setCookieValues.match(/__Host-factory-session=[^;\s,]+/)?.[0] || '';
+            csrf = String(stateResponse.data.session.csrf || '');
+            requireOk(cookie.startsWith('__Host-factory-session=') && csrf,
+              'The shared session cookie or CSRF token was not issued.');
+            requireOk(['admin', 'editor'].includes(stateResponse.data.session.role),
+              'The public session does not have file-write permission; no upload attempted.');
+            console.log('PASS: public shared session established; role=' + stateResponse.data.session.role + '.');
+
+            const initial = await getList();
+            requireOk(!initial.files.some(f => f.file_name === testName),
+              'The unique temporary filename already exists; no upload attempted.');
+            baselineBytes = Number(initial.totalBytes || 0);
+            console.log('PASS: live file-list API; baseline bytes=' + baselineBytes + '.');
+
+            const upload = await api('/api/files?name=' + encodeURIComponent(testName), {
+              method: 'POST',
+              write: true,
+              headers: { 'Content-Type': 'application/octet-stream' },
+              body: bytes
+            });
+            requireOk(upload.status === 201 && upload.data?.ok === true && upload.data.file?.id,
+              'Live file upload failed: HTTP ' + upload.status + ' ' + JSON.stringify(upload.data));
+            fileId = String(upload.data.file.id);
+            uploadCreated = true;
+            requireOk(upload.data.file.file_name === testName, 'Uploaded filename did not match the exact test filename.');
+            console.log('PASS: live upload returned HTTP 201; bytes=' + upload.data.file.size + '.');
+
+            const afterUpload = await getList();
+            const row = afterUpload.files.find(f => f.file_name === testName && f.id === fileId);
+            requireOk(row && Number(row.size) === bytes.length,
+              'Exact temporary file not present in the D1-backed listing after upload.');
+            const inline = await api('/api/files/' + encodeURIComponent(fileId) + '/content');
+            requireOk(inline.status === 200 && inline.bytes.equals(bytes),
+              'Live R2 inline read did not match the uploaded bytes.');
+            const downloaded = await api('/api/files/' + encodeURIComponent(fileId) + '/content?download=1');
+            requireOk(downloaded.status === 200 && downloaded.bytes.equals(bytes)
+              && String(downloaded.headers.get('content-disposition') || '').startsWith('attachment'),
+              'Live R2 attachment download did not match the uploaded bytes.');
+            console.log('PASS: D1 listing, exact byte-for-byte R2 read, and attachment download.');
+
+            const deleted = await deleteExactTestFile(fileId);
+            requireOk(deleted, 'The exact test file was not found for cleanup.');
+            uploadCreated = false;
+            const finalList = await getList();
+            requireOk(!finalList.files.some(f => f.file_name === testName),
+              'Temporary test filename remained in the file list after deletion.');
+            finalBytes = Number(finalList.totalBytes || 0);
+            requireOk(finalBytes === baselineBytes,
+              'Storage usage did not return to the baseline: before=' + baselineBytes + ', after=' + finalBytes);
+            console.log('PASS: exact test file deleted; storage bytes restored to baseline=' + finalBytes + '.');
+          } catch (error) {
+            console.error('LIVE PRODUCTION FILE SMOKE TEST FAILED: ' + (error?.message || error));
+            process.exitCode = 1;
+          } finally {
+            if (uploadCreated && fileId && cookie && csrf) {
+              try {
+                const removed = await deleteExactTestFile(fileId);
+                if (removed) console.log('CLEANUP: removed the exact temporary test file after a failed assertion.');
+                else console.log('CLEANUP: exact temporary test file was not present in the listing.');
+                const finalList = await getList();
+                const stillPresent = finalList.files.some(f => f.file_name === testName && f.id === fileId);
+                if (stillPresent) {
+                  cleanupOk = false;
+                  console.error('CLEANUP WARNING: the exact temporary test file still appears in the file list.');
+                }
+              } catch (cleanupError) {
+                cleanupOk = false;
+                console.error('CLEANUP WARNING: could not verify removal of the exact temporary test file: ' + (cleanupError?.message || cleanupError));
+              }
+            }
+            if (!cleanupOk) process.exitCode = 1;
+            console.log('Test target: ' + base.origin + '; unique temporary filename: ' + testName + '.');
+            console.log('Expected persistent side effect: two audit events for the test upload and its deletion; no factory rows are modified.');
+          }
+          NODE
