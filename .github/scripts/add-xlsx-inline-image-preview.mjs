@@ -32,7 +32,7 @@ let html = read('public/index.html');
 const scriptRef = /(<script\b[^>]*\bsrc=["'])([^"']*app\.js)(?:\?[^"']*)?(["'][^>]*>)/i;
 const match = html.match(scriptRef);
 if (!match) throw new Error('Could not locate app.js in public/index.html for cache-busting.');
-const version = 'v=yourz-refresh-20261020-1&supplier-quotes=20261020-1&xlsx-images=20261020-1';
+const version = 'v=yourz-refresh-20261016-3&safe-import=20261016-1&files-v1=20261016-2&supplier-quotes=20261020-1&xlsx-images=20261020-1';
 html = html.replace(scriptRef, match[1] + match[2] + '?' + version + match[3]);
 write('public/index.html', html);
 if (!html.includes('xlsx-images=20261020-1')) throw new Error('XLSX preview script cache-busting could not be verified.');
