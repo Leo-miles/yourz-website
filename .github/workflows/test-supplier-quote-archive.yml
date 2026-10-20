@@ -1,0 +1,48 @@
+name: Test supplier quote archive (isolated branch only)
+
+on:
+  push:
+    branches:
+      - test/supplier-quote-archive-v1
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Build and test supplier-linked quotation files
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check transformation scripts
+        run: |
+          node --check .github/scripts/add-safe-bulk-import.mjs
+          node --check .github/scripts/add-product-file-library.mjs
+          node --check .github/scripts/fix-load-latest.mjs
+          node --check .github/scripts/add-supplier-quote-archive.mjs
+      - name: Extract production runtime into a disposable test workspace
+        run: |
+          mkdir -p app
+          tar -xJf yourz-runtime.tar.xz -C app
+      - name: Apply the existing frontend/server transformations to test files only
+        run: |
+          node deploy-fixes/enable-admin-diagnostics.mjs app/src/handler.js
+          node deploy-fixes/enable-public-entry.mjs app
+          node deploy-fixes/add-yourz-favicon.mjs app
+          npm install --prefix app --no-save --package-lock=false jszip@3.10.1
+          node .github/scripts/fix-load-latest.mjs app
+          node .github/scripts/add-supplier-quote-archive.mjs app
+      - name: Check generated application syntax
+        run: |
+          node --check app/src/handler.js
+          node --check app/public/app.js
+          node -e "const fs=require('fs');const s=fs.readFileSync('app/public/app.js','utf8');for(const marker of ['YOURZ_SUPPLIER_QUOTE_ARCHIVE_V1','mountSupplierQuoteFiles','supplier-quote-thumb','previewProductFile(fileId,supplierQuoteRows,id)'])if(!s.includes(marker))throw new Error('Missing UI marker: '+marker);console.log('Supplier profile panel and inline product-image preview markers verified.');"
+      - name: Run isolated D1 and R2 runtime tests
+        working-directory: app
+        run: |
+          npm run check
+          node test-worker.mjs
