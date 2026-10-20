@@ -1,0 +1,134 @@
+name: YOURZ isolated supplier quote UI preview
+
+on:
+  push:
+    branches:
+      - test/supplier-quote-archive-v1
+    paths:
+      - "preview-supplier-quote-ui/**"
+      - ".github/workflows/deploy-supplier-quote-ui-preview.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: yourz-supplier-quote-ui-preview
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Publish the static UI preview to a non-production Pages branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      CLOUDFLARE_API_TOKEN: \${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: \${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      PROJECT_NAME: yourz-website
+      PREVIEW_BRANCH: supplier-quote-ui-preview
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate credentials and existing Pages project (read-only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo "::error::Cloudflare API token missing; no deployment attempted."; exit 1; }
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo "::error::Cloudflare account ID missing; no deployment attempted."; exit 1; }
+
+          TOKEN_HTTP="$(curl --silent --show-error --max-time 20 --output /tmp/yourz-token-verify.json --write-out '%{http_code}' \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            https://api.cloudflare.com/client/v4/user/tokens/verify)"
+          node - "$TOKEN_HTTP" /tmp/yourz-token-verify.json <<'NODE'
+          const fs=require('node:fs');
+          const body=JSON.parse(fs.readFileSync(process.argv[3],'utf8'));
+          if(process.argv[2]!=='200'||body.success!==true||body.result?.status!=='active'){
+            console.error('Cloudflare token verification failed; no deployment attempted.');
+            process.exit(1);
+          }
+          console.log('Cloudflare API token is active.');
+          NODE
+
+          PROJECT_HTTP="$(curl --silent --show-error --max-time 20 --output /tmp/yourz-pages-project.json --write-out '%{http_code}' \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$PROJECT_NAME")"
+          node - "$PROJECT_HTTP" /tmp/yourz-pages-project.json <<'NODE'
+          const fs=require('node:fs');
+          const body=JSON.parse(fs.readFileSync(process.argv[3],'utf8'));
+          const project=body.result||{};
+          if(process.argv[2]!=='200'||body.success!==true||project.name!=='yourz-website'){
+            console.error('Could not verify the existing Pages project; refusing to deploy.');
+            process.exit(1);
+          }
+          if(project.production_branch!=='main'){
+            console.error('Production branch is not main; refusing to deploy the preview.');
+            process.exit(1);
+          }
+          console.log('Existing Pages project verified; production branch is main.');
+          NODE
+          rm -f /tmp/yourz-token-verify.json /tmp/yourz-pages-project.json
+
+      - name: Verify this preview is static-only and self-contained
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f preview-supplier-quote-ui/index.html
+          test ! -e preview-supplier-quote-ui/functions
+          test ! -e preview-supplier-quote-ui/_worker.js
+          test ! -e preview-supplier-quote-ui/wrangler.toml
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const html=fs.readFileSync('preview-supplier-quote-ui/index.html','utf8');
+          for(const marker of ['YOURZ','报价单与产品图片','上传报价单','上传产品图片','PRODUCT IMAGE','URL.createObjectURL','不会上传到服务器']){
+            if(!html.includes(marker)) throw new Error('Preview marker missing: '+marker);
+          }
+          if(/fetch\s*\(\s*["'][^"']*(?:\/api\/|cloudflare)/i.test(html)){
+            throw new Error('Static preview must not make backend/API requests.');
+          }
+          console.log('Static interactive preview verified. No Functions, D1 binding, R2 binding, API call, or production data is included.');
+          NODE
+
+      - name: Install Wrangler
+        run: npm install --global wrangler@4
+
+      - name: Deploy only to the non-production Pages preview branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEPLOY_LOG=/tmp/yourz-supplier-quote-ui-preview.log
+          wrangler pages deploy ./preview-supplier-quote-ui \
+            --project-name "$PROJECT_NAME" \
+            --branch "$PREVIEW_BRANCH" \
+            --commit-dirty=true 2>&1 | tee "$DEPLOY_LOG"
+          DEPLOY_URL="$(grep -Eo 'https://[a-zA-Z0-9-]+\.yourz-website\.pages\.dev' "$DEPLOY_LOG" | head -n 1)"
+          test -n "$DEPLOY_URL" || { echo "::error::Could not resolve the deployment URL."; exit 1; }
+          case "$DEPLOY_URL" in
+            *yourz.top*) echo "::error::Unexpected custom domain in deployment URL."; exit 1 ;;
+          esac
+          echo "DEPLOY_URL=$DEPLOY_URL" >> "$GITHUB_ENV"
+          echo "Published static preview only: $DEPLOY_URL"
+          echo "No production branch, custom domain, DNS records, D1 database, or R2 bucket was changed."
+
+      - name: Verify the exact preview page is live
+        shell: bash
+        run: |
+          set -euo pipefail
+          PREVIEW_URL="https://$PREVIEW_BRANCH.$PROJECT_NAME.pages.dev/"
+          CODE="$(curl --silent --show-error --location --max-time 25 --output /tmp/yourz-preview-page.html \
+            --write-out '%{http_code}' -H 'Cache-Control: no-cache' "$PREVIEW_URL")"
+          test "$CODE" = "200" || { echo "::error::Preview URL verification failed with HTTP $CODE."; exit 1; }
+          node - /tmp/yourz-preview-page.html "$PREVIEW_URL" <<'NODE'
+          const fs=require('node:fs');
+          const html=fs.readFileSync(process.argv[2],'utf8');
+          const url=process.argv[3];
+          for(const marker of ['交互预览','供应商报价单与产品图片','上传产品图片','PRODUCT IMAGE','不会上传到服务器']){
+            if(!html.includes(marker)) {
+              console.error('Live preview content marker missing: '+marker+' at '+url);
+              process.exit(1);
+            }
+          }
+          console.log('PASS: the non-production Pages branch serves the complete interactive preview at '+url);
+          console.log('Reminder: uploads stay in the visitor browser only and are cleared on refresh.');
+          NODE
+          rm -f /tmp/yourz-preview-page.html /tmp/yourz-supplier-quote-ui-preview.log
