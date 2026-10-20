@@ -32,9 +32,9 @@ jobs:
           import fs from 'node:fs';
           const s=fs.readFileSync('app/public/app.js','utf8');
           const terms=[
-            'function render()','function factory','function details','function openFactory',
+            'function render()','function factory','function profile(','function list(','function get(','function gate(','function details','function openFactory',
             'modal.innerHTML','function content','view===\'factories\'','factories.map',
-            'data-factory','function renderProductFiles','function guide()'
+            'data-factory','function renderProductFiles','function guide()','function bindProfile','function profile('
           ];
           for(const term of terms){
             let i=-1,count=0;
