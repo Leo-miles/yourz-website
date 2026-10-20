@@ -253,6 +253,10 @@ if (!test.includes('YOURZ_SUPPLIER_QUOTE_ARCHIVE_TESTS_V1')) {
     'assert.equal(deleteImage.status,200,await deleteImage.clone().text());',
     'const supplierListAfterCleanup = await request("/api/files?supplierId="+encodeURIComponent(supplierId)+"&page=1",{cookie:supplierCookie});',
     'assert.equal((await supplierListAfterCleanup.json()).total,0);',
+    'const supplierXlsxPreviewSource = await (await import("node:fs/promises")).readFile("public/app.js","utf8");',
+    'assert.ok(supplierXlsxPreviewSource.includes("YOURZ_XLSX_INLINE_IMAGE_PREVIEW_V1"), "XLSX embedded-image preview patch must be applied.");',
+    'assert.ok(supplierXlsxPreviewSource.includes("xlsx-cell-image"), "XLSX preview must render embedded product images.");',
+    'assert.ok(supplierXlsxPreviewSource.includes("YOURZ_XLSX_URL_CLEANUP_V1"), "XLSX preview object URLs must be cleaned up.");',
     testAnchor
   ].join('\n');
   test = replaceOnce(test, testAnchor, testPatch, 'test supplier association, separate listings, inline image bytes and cross-supplier guards');
@@ -260,3 +264,4 @@ if (!test.includes('YOURZ_SUPPLIER_QUOTE_ARCHIVE_TESTS_V1')) {
 }
 
 console.log('Supplier quote archive patch applied for isolated testing only.');
+await import('./add-xlsx-inline-image-preview.mjs');
