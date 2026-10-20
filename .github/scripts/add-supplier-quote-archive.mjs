@@ -189,7 +189,7 @@ let html = read('public/index.html');
 const scriptRef = /(<script\b[^>]*\bsrc=["'])([^"']*app\.js)(?:\?[^"']*)?(["'][^>]*>)/i;
 const match = html.match(scriptRef);
 if (!match) throw new Error('Could not find the app.js reference in index.html; refusing a potentially cached UI.');
-const version = 'v=yourz-refresh-20261020-1&supplier-quotes=20261020-1';
+const version = 'v=yourz-refresh-20261016-3&safe-import=20261016-1&files-v1=20261016-2&supplier-quotes=20261020-1';
 html = html.replace(scriptRef, match[1] + match[2] + '?' + version + match[3]);
 write('public/index.html', html);
 console.log('Browser cache-busting updated for supplier quote and product-image previews.');
