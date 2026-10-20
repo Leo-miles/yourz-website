@@ -35,7 +35,9 @@ if (!match) throw new Error('Could not locate app.js in public/index.html for ca
 const version = 'v=yourz-refresh-20261016-3&safe-import=20261016-1&files-v1=20261016-2&supplier-quotes=20261020-1&xlsx-images=20261020-1';
 html = html.replace(scriptRef, match[1] + match[2] + '?' + version + match[3]);
 write('public/index.html', html);
-if (!html.includes('xlsx-images=20261020-1')) throw new Error('XLSX preview script cache-busting could not be verified.');
+const deployVerificationPrefix = 'app.js?v=yourz-refresh-20261016-3&safe-import=20261016-1&files-v1=20261016-2';
+const completePreviewReference = deployVerificationPrefix + '&supplier-quotes=20261020-1&xlsx-images=20261020-1';
+if (!html.includes(deployVerificationPrefix) || !html.includes(completePreviewReference)) throw new Error('XLSX preview script cache-busting must preserve the existing production deploy verification marker and include supplier/XLSX version tags.');
 
 if (!app.includes('YOURZ_XLSX_INLINE_IMAGE_PREVIEW_V1') || !app.includes('xlsx-cell-image') || !app.includes('YOURZ_XLSX_URL_CLEANUP_V1')) {
   throw new Error('XLSX embedded-image preview verification failed.');
