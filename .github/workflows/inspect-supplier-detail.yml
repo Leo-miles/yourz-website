@@ -1,0 +1,51 @@
+name: Inspect supplier detail UI (test branch only)
+
+on:
+  push:
+    branches:
+      - test/supplier-quote-archive-v1
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Extract runtime and apply base test transformations
+        run: |
+          mkdir -p app
+          tar -xJf yourz-runtime.tar.xz -C app
+          node deploy-fixes/enable-admin-diagnostics.mjs app/src/handler.js
+          node deploy-fixes/enable-public-entry.mjs app
+          node deploy-fixes/add-yourz-favicon.mjs app
+          npm install --prefix app --no-save --package-lock=false jszip@3.10.1
+          node .github/scripts/fix-load-latest.mjs app
+      - name: Print supplier detail UI anchors for implementation
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const s=fs.readFileSync('app/public/app.js','utf8');
+          const terms=[
+            'function render()','function factory','function details','function openFactory',
+            'modal.innerHTML','function content','view===\'factories\'','factories.map',
+            'data-factory','function renderProductFiles','function guide()'
+          ];
+          for(const term of terms){
+            let i=-1,count=0;
+            while((i=s.indexOf(term,i+1))>=0&&count<4){
+              console.log('\\n--- '+term+' @ '+i+' ---\\n'+s.slice(Math.max(0,i-400),Math.min(s.length,i+1800)));
+              count++;
+            }
+          }
+          console.log('\\n--- factory properties and detail pane markers ---');
+          for(const term of ['showFactory','selectedFactory','activeFactory','factoryModal','factory.id','f.id','editFactory','factoryForm']){
+            const i=s.indexOf(term);
+            if(i>=0)console.log('\\n--- '+term+' @ '+i+' ---\\n'+s.slice(Math.max(0,i-300),Math.min(s.length,i+1000)));
+          }
+          NODE
