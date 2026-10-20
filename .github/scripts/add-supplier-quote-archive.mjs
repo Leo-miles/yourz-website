@@ -119,8 +119,6 @@ if (!app.includes('YOURZ_SUPPLIER_QUOTE_ARCHIVE_V1')) {
 
   const renderAnchor = "main.innerHTML=banner()+content;if(view==='guide'){renderProductFiles();bindProductFileInput();if(!productFilesLoading)loadProductFiles(true).catch(()=>{});}const search=document.getElementById('search');if(search)";
   const renderPatch = "main.innerHTML=banner()+content;if(selected){mountSupplierQuoteFiles(selected);}if(view==='guide'){renderProductFiles();bindProductFileInput();if(!productFilesLoading)loadProductFiles(true).catch(()=>{});}const search=document.getElementById('search');if(search)";
-  const renderPositionForQa = app.indexOf(renderAnchor);
-  if (renderPositionForQa >= 0) console.log('SUPPLIER_RENDER_CONTEXT_BEGIN\\n' + app.slice(Math.max(0, renderPositionForQa - 1800), Math.min(app.length, renderPositionForQa + renderAnchor.length + 500)) + '\\nSUPPLIER_RENDER_CONTEXT_END');
   app = replaceOnce(app, renderAnchor, renderPatch, 'mount supplier-specific files inside the supplier profile');
 
   const blobAnchor = ' async function getProductFileBlob(id,download){const url="/api/files/"+encodeURIComponent(id)+"/content"+(download?"?download=1":"");const response=await fetch(url,{credentials:"same-origin",cache:"no-store"});if(!response.ok){let data={};try{data=await response.json();}catch{}throw Error(data.error||("HTTP "+response.status));}return response.blob();}';
