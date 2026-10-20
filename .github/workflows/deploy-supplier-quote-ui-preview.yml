@@ -80,7 +80,7 @@ jobs:
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
           const html=fs.readFileSync('preview-supplier-quote-ui/index.html','utf8');
-          const script=html.match(/<script>([\\s\\S]*?)<\\/script>/i);
+          const script=html.match(/<script>([\s\S]*?)<\/script>/i);
           if(!script) throw new Error('The preview page has no inline JavaScript.');
           fs.writeFileSync('/tmp/yourz-preview-ui.js',script[1]);
           for(const marker of ['YOURZ','报价单与产品图片','上传报价单','上传产品图片','PRODUCT IMAGE','URL.createObjectURL','不会上传到服务器']){
