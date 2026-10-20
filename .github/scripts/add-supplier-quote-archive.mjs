@@ -97,7 +97,7 @@ if (!handler.includes('YOURZ_SUPPLIER_QUOTE_ARCHIVE_API_V1')) {
   handler = replaceOnce(
     handler,
     "    const meta = await env.DB.prepare('SELECT id,file_name,content_type,size,object_key FROM uploaded_files WHERE id=?').bind(contentMatch[1]).first();\n    if (!meta) fail(404, 'File not found / 文件不存在');",
-    "    const meta = await env.DB.prepare('SELECT id,file_name,content_type,size,object_key,supplier_id,file_category FROM uploaded_files WHERE id=?').bind(contentMatch[1]).first();\n    if (!meta) fail(404, 'File not found / 文件不存在');\n    const requestedSupplierId = url.searchParams.get('supplierId');\n    if (requestedSupplierId !== null && String(meta.supplier_id || '') !== requestedSupplierId) fail(404, 'File not found for this supplier / 该供应商下没有此文件');",
+    "    const meta = await env.DB.prepare('SELECT id,file_name,content_type,size,object_key,supplier_id,file_category FROM uploaded_files WHERE id=?').bind(contentMatch[1]).first();\n    if (!meta) fail(404, 'File not found / 文件不存在');\n    const requestedSupplierId = url.searchParams.get('supplierId');\n    if (meta.supplier_id && (requestedSupplierId === null || String(meta.supplier_id) !== requestedSupplierId)) fail(404, 'File not found for this supplier / 该供应商下没有此文件');\n    if (requestedSupplierId !== null && String(meta.supplier_id || '') !== requestedSupplierId) fail(404, 'File not found for this supplier / 该供应商下没有此文件');",
     'validate the supplier association for file preview and download'
   );
 
@@ -241,6 +241,10 @@ if (!test.includes('YOURZ_SUPPLIER_QUOTE_ARCHIVE_TESTS_V1')) {
     'assert.deepEqual(Array.from(new Uint8Array(await imagePreview.response.arrayBuffer())),Array.from(sampleProductPng));',
     'const imageCrossSupplier = await request("/api/files/"+encodeURIComponent(supplierImageUpload.data.file.id)+"/content?supplierId="+encodeURIComponent(secondSupplierId),{cookie:supplierCookie});',
     'assert.equal(imageCrossSupplier.status,404);',
+    'const imageWithoutSupplier = await request("/api/files/"+encodeURIComponent(supplierImageUpload.data.file.id)+"/content",{cookie:supplierCookie});',
+    'assert.equal(imageWithoutSupplier.status,404,"Supplier-linked file content must require the owning supplier ID.");',
+    'const imageWithBlankSupplier = await request("/api/files/"+encodeURIComponent(supplierImageUpload.data.file.id)+"/content?supplierId=",{cookie:supplierCookie});',
+    'assert.equal(imageWithBlankSupplier.status,404,"A blank supplier ID must not bypass supplier ownership.");',
     'const crossSupplierDelete = await request("/api/files/"+encodeURIComponent(supplierImageUpload.data.file.id)+"?supplierId="+encodeURIComponent(secondSupplierId),{method:"DELETE",body:{},cookie:supplierCookie,csrf:supplierCreateData.session.csrf});',
     'assert.equal(crossSupplierDelete.status,404);',
     'const deleteQuote = await request("/api/files/"+encodeURIComponent(supplierQuoteUpload.data.file.id)+"?supplierId="+encodeURIComponent(supplierId),{method:"DELETE",body:{},cookie:supplierCookie,csrf:supplierCreateData.session.csrf});',
