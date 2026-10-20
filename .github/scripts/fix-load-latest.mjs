@@ -81,3 +81,4 @@ console.log('Browser cache bust applied: app.js?' + version);
 // Apply the safe supplier JSON import module to the shared application.
 await import('./add-safe-bulk-import.mjs');
 await import('./add-product-file-library.mjs');
+await import('./add-supplier-quote-archive.mjs');
