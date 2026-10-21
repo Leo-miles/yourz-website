@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - test/product-file-upload-v1
+      - release/supplier-quote-archive-v1
 
 permissions:
   contents: read
@@ -21,6 +22,8 @@ jobs:
         run: |
           node --check .github/scripts/add-safe-bulk-import.mjs
           node --check .github/scripts/add-product-file-library.mjs
+          node --check .github/scripts/add-supplier-quote-archive.mjs
+          node --check .github/scripts/add-xlsx-inline-image-preview.mjs
       - name: Extract production runtime into test workspace
         run: |
           mkdir -p app
@@ -33,12 +36,18 @@ jobs:
       - name: Install local preview libraries
         working-directory: app
         run: npm install --no-save --package-lock=false jszip@3.10.1
-      - name: Apply file library changes on test workspace only
+      - name: Apply shared-file library changes on test workspace only
         run: node .github/scripts/fix-load-latest.mjs app
-      - name: Validate generated source and runtime tests
+      - name: Apply supplier quote archive and XLSX inline-image preview on test workspace only
+        run: node .github/scripts/add-supplier-quote-archive.mjs app
+      - name: Validate generated runtime, supplier isolation, and preview assets
         working-directory: app
         run: |
           node --check src/handler.js
           node --check public/app.js
           npm run check
           node test-worker.mjs
+          test -f public/vendor/jszip.min.js
+          grep -q "YOURZ_SUPPLIER_QUOTE_ARCHIVE_V1" public/app.js
+          grep -q "YOURZ_XLSX_INLINE_IMAGE_PREVIEW_V1" public/app.js
+          grep -q "supplier-quotes=20261020-1&xlsx-images=20261020-1" public/index.html
