@@ -82,6 +82,31 @@ jobs:
           NODE
           rm -f /tmp/cf-verify.json /tmp/cf-d1-access.json
 
+      - name: 只读核验现有 R2 桶
+        shell: bash
+        run: |
+          set -euo pipefail
+          HTTP="$(curl --silent --show-error --max-time 20 --output /tmp/yourz-r2-buckets.json --write-out '%{http_code}' -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/r2/buckets?per_page=1000")"
+          node - "$HTTP" /tmp/yourz-r2-buckets.json <<'NODE'
+          const fs=require('node:fs');
+          const http=process.argv[2];
+          const body=JSON.parse(fs.readFileSync(process.argv[3],'utf8'));
+          if(http!=='200'||body.success!==true){
+            console.log('R2 桶只读核验失败，尚未部署。HTTP '+http);
+            for(const e of body.errors||[])console.log('Cloudflare 错误：'+String(e.code??'未知')+' '+String(e.message||'').slice(0,200));
+            process.exit(1);
+          }
+          const raw=body.result||[];
+          const buckets=Array.isArray(raw)?raw:(raw.buckets||[]);
+          const found=buckets.some(b=>b&&b.name==='yourz-product-files');
+          if(!found){
+            console.log('未找到现有 R2 桶 yourz-product-files，尚未部署。');
+            process.exit(1);
+          }
+          console.log('已确认现有 R2 桶 yourz-product-files 可见；不会新建或修改桶。');
+          NODE
+          rm -f /tmp/yourz-r2-buckets.json
+
       - name: 校验并解压网站程序
         shell: bash
         run: |
@@ -190,6 +215,10 @@ jobs:
           binding = "DB"
           database_name = "yourz-factory-db"
           database_id = "$DB_ID"
+
+          [[r2_buckets]]
+          binding = "FILES"
+          bucket_name = "yourz-product-files"
           EOF
 
       - name: 设置初始管理员
