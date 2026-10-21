@@ -8,6 +8,7 @@ on:
     paths:
       - "yourz-runtime.tar.xz"
       - ".github/workflows/deploy-cloudflare.yml"
+      - ".github/scripts/**"
       - "deploy-fixes/**"
   workflow_dispatch:
 
@@ -91,9 +92,31 @@ jobs:
           node deploy-fixes/enable-admin-diagnostics.mjs app/src/handler.js
           node deploy-fixes/enable-public-entry.mjs app
           node deploy-fixes/add-yourz-favicon.mjs app
-          cd app
+
+      - name: 安装并打包本地 Excel 预览依赖
+        working-directory: app
+        run: npm install --no-save --package-lock=false jszip@3.10.1
+
+      - name: 将共享文件库、供应商报价归档和 Excel 图片预览接入正式运行包
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check .github/scripts/fix-load-latest.mjs
+          node --check .github/scripts/add-safe-bulk-import.mjs
+          node --check .github/scripts/add-product-file-library.mjs
+          node --check .github/scripts/add-supplier-quote-archive.mjs
+          node --check .github/scripts/add-xlsx-inline-image-preview.mjs
+          node .github/scripts/fix-load-latest.mjs app
+          node .github/scripts/add-supplier-quote-archive.mjs app
+
+      - name: 检查生成后的正式运行包
+        working-directory: app
+        run: |
           npm run check
           node test-worker.mjs
+          node --check public/app.js
+          test -f public/vendor/jszip.min.js
+          grep -q "supplier-quotes=20261020-1&xlsx-images=20261020-1" public/index.html
 
       - name: 安装 Cloudflare 部署工具
         run: npm install --global wrangler@4
