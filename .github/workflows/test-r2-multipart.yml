@@ -67,4 +67,4 @@ jobs:
           grep -q "YOURZ_R2_MULTIPART_10GB_V1" public/app.js
           grep -q "MAX_SINGLE_PRODUCT_FILE_BYTES = 20 \* 1024 \* 1024" src/handler.js
           grep -q "MAX_TOTAL_PRODUCT_FILE_BYTES = 20_000_000_000" src/handler.js
-          grep -q "multipart-10gb=20261025-1" public/index.html
+          grep -q "multipart-nofilecap=20261026-1" public/index.html
