@@ -75,6 +75,48 @@ if(!a.includes("YOURZ_R2_MULTIPART_10GB_V1")){
  a=a.replace("/* YOURZ PRODUCT FILE LIBRARY V1 HELPERS */","/* YOURZ PRODUCT FILE LIBRARY V1 HELPERS */\n /* YOURZ_R2_MULTIPART_10GB_V1 */");
  fs.writeFileSync(af,a);
 }
+const testFile=path.join(root,"test-worker.mjs");
+let test=fs.readFileSync(testFile,"utf8");
+test=test.replaceAll("9000000000","20000000000");
+test=test.replace("constructor() { this.objects = new Map(); }","constructor() { this.objects = new Map(); this.multipartUploads = new Map(); }");
+const deleteMock='  async delete(key) { this.objects.delete(key); }';
+const multipartMock=[
+'  async createMultipartUpload(key, options = {}) { const uploadId = "mock-upload-" + (this.multipartUploads.size + 1); this.multipartUploads.set(uploadId, { key, options, parts:new Map() }); return this.resumeMultipartUpload(key, uploadId); }',
+'  resumeMultipartUpload(key, uploadId) {',
+'    const state = this.multipartUploads.get(uploadId); if (!state || state.key !== key) throw new Error("Missing mock multipart upload");',
+'    return {',
+'      uploadPart: async (partNumber, body) => { const bytes = new Uint8Array(await new Response(body).arrayBuffer()); state.parts.set(partNumber, bytes); return { etag:"etag-" + partNumber }; },',
+'      complete: async (parts) => { const chunks = parts.map(part => state.parts.get(part.partNumber)); if (chunks.some(chunk => !chunk)) throw new Error("Missing mock part"); const size = chunks.reduce((sum, chunk) => sum + chunk.length, 0); const bytes = new Uint8Array(size); let offset = 0; for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; } this.objects.set(key, { bytes, options:state.options }); this.multipartUploads.delete(uploadId); },',
+'      abort: async () => { this.multipartUploads.delete(uploadId); }',
+'    };',
+'  }'
+].join("\n");
+if(!test.includes("resumeMultipartUpload(")){
+ if(!test.includes(deleteMock))throw new Error("R2 test mock anchor missing");
+ test=test.replace(deleteMock,deleteMock+"\n"+multipartMock);
+}
+const quotaAnchor='const quotaDenied = await rawRequest("/api/files?name=quota.pdf"';
+const multipartTests=[
+'const multipartStart = await rawRequest("/api/files/multipart?name=" + encodeURIComponent("分片测试.pdf"), { method:"POST", body:samplePdf, cookie:adminCookie, csrf, contentLength:samplePdf.byteLength });',
+'assert.equal(multipartStart.status,201, JSON.stringify(multipartStart.data));',
+'const multipartId = multipartStart.data.uploadId;',
+'const multipartPart = await rawRequest("/api/files/multipart/" + multipartId + "/part?partNumber=1", { method:"PUT", body:samplePdf, cookie:adminCookie, csrf, contentLength:samplePdf.byteLength });',
+'assert.equal(multipartPart.status,200, JSON.stringify(multipartPart.data));',
+'const multipartComplete = await request("/api/files/multipart/" + multipartId + "/complete", { method:"POST", body:{parts:[{partNumber:1,etag:"etag-1"}]}, cookie:adminCookie, csrf });',
+'assert.equal(multipartComplete.status,201, await multipartComplete.clone().text());',
+'const multipartFile = await multipartComplete.json();',
+'assert.equal(multipartFile.file.file_name,"分片测试.pdf");',
+'assert.deepEqual(Array.from(FILES.objects.values())[0].bytes,Array.from(samplePdf));',
+'const multipartDelete = await request("/api/files/" + multipartId, { method:"DELETE", body:{}, cookie:adminCookie, csrf });',
+'assert.equal(multipartDelete.status,200, await multipartDelete.clone().text());',
+'assert.equal(FILES.objects.size,0);'
+].join("\n");
+if(!test.includes("const multipartStart =")) {
+ if(!test.includes(quotaAnchor))throw new Error("Multipart test insertion anchor missing");
+ test=test.replace(quotaAnchor,multipartTests+"\n"+quotaAnchor);
+}
+fs.writeFileSync(testFile,test);
+
 if(!html.includes("multipart-10gb=20261025-1")){const m=html.match(/(<script\b[^>]*\bsrc=["'][^"']*app\.js\?)([^"']*)(["'][^>]*>)/i);if(!m)throw Error("Could not find versioned app.js URL");html=html.replace(m[0],m[1]+m[2]+"&multipart-10gb=20261025-1"+m[3]);fs.writeFileSync(ix,html)}
 if(!h.includes("YOURZ_R2_MULTIPART_10GB_V1")||!a.includes("YOURZ_R2_MULTIPART_10GB_V1")||!html.includes("multipart-10gb=20261025-1"))throw Error("Multipart patch verification failed");
 console.log("R2 multipart upload patch applied: 10 GB file cap, 20 GB shared cap, 16 MiB chunks, retries, CSRF/role checks, and streamed downloads.");
