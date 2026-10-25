@@ -4,7 +4,7 @@ const root=process.argv[2]||"app";
 const hf=path.join(root,"src/handler.js"), af=path.join(root,"public/app.js"), ix=path.join(root,"public/index.html");
 let h=fs.readFileSync(hf,"utf8"), a=fs.readFileSync(af,"utf8"), html=fs.readFileSync(ix,"utf8");
 if(!h.includes("YOURZ_R2_MULTIPART_10GB_V1")){
- h=h.replace("const MAX_PRODUCT_FILE_BYTES = 20 * 1024 * 1024;","const MAX_PRODUCT_FILE_BYTES = 10_000_000_000;\nconst MAX_SINGLE_PRODUCT_FILE_BYTES = 20 * 1024 * 1024;");
+ h=h.replace("const MAX_PRODUCT_FILE_BYTES = 20 * 1024 * 1024;","const MAX_SINGLE_PRODUCT_FILE_BYTES = 20 * 1024 * 1024;");
  h=h.replace("const MAX_TOTAL_PRODUCT_FILE_BYTES = 9_000_000_000;","const MAX_TOTAL_PRODUCT_FILE_BYTES = 20_000_000_000;");
  h=h.replace("if (size > MAX_PRODUCT_FILE_BYTES) fail(413, 'Each file must be 20 MB or smaller / 单个文件不能超过20MB');","if (size > MAX_SINGLE_PRODUCT_FILE_BYTES) fail(413, 'Use multipart upload for files over 20 MB / 超过20MB请使用分片上传');");
  h=h.replace("Shared file storage safety limit reached (9 GB). Delete unused files before uploading more. / 共享文件存储达到9GB安全上限，请删除不再需要的文件后再上传","Shared file storage safety limit reached (20 GB). Delete unused files before uploading more. / 共享文件存储达到20GB安全上限，请删除不再需要的文件后再上传");
