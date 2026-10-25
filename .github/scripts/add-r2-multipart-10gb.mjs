@@ -80,6 +80,8 @@ if(!a.includes("YOURZ_R2_MULTIPART_10GB_V1")){
 const testFile=path.join(root,"test-worker.mjs");
 let test=fs.readFileSync(testFile,"utf8");
 test=test.replaceAll("9000000000","20000000000");
+test=test.replace('contentLength, origin = "https://yourz.example.test"','contentLength, partSize, origin = "https://yourz.example.test"');
+test=test.replace('if (contentLength !== undefined) headers.set("X-File-Size", String(contentLength)); }','if (contentLength !== undefined) headers.set("X-File-Size", String(contentLength)); if (partSize !== undefined) headers.set("X-Part-Size", String(partSize)); }');
 test=test.replace("constructor() { this.objects = new Map(); }","constructor() { this.objects = new Map(); this.multipartUploads = new Map(); }");
 const deleteMock='  async delete(key) { this.objects.delete(key); }';
 const multipartMock=[
