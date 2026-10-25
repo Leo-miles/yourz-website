@@ -8,6 +8,7 @@ on:
     paths:
       - "yourz-runtime.tar.xz"
       - ".github/workflows/deploy-cloudflare.yml"
+      - ".github/scripts/**"
       - "deploy-fixes/**"
   workflow_dispatch:
 
@@ -81,6 +82,31 @@ jobs:
           NODE
           rm -f /tmp/cf-verify.json /tmp/cf-d1-access.json
 
+      - name: 只读核验现有 R2 桶
+        shell: bash
+        run: |
+          set -euo pipefail
+          HTTP="$(curl --silent --show-error --max-time 20 --output /tmp/yourz-r2-buckets.json --write-out '%{http_code}' -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/r2/buckets?per_page=1000")"
+          node - "$HTTP" /tmp/yourz-r2-buckets.json <<'NODE'
+          const fs=require('node:fs');
+          const http=process.argv[2];
+          const body=JSON.parse(fs.readFileSync(process.argv[3],'utf8'));
+          if(http!=='200'||body.success!==true){
+            console.log('R2 桶只读核验失败，尚未部署。HTTP '+http);
+            for(const e of body.errors||[])console.log('Cloudflare 错误：'+String(e.code??'未知')+' '+String(e.message||'').slice(0,200));
+            process.exit(1);
+          }
+          const raw=body.result||[];
+          const buckets=Array.isArray(raw)?raw:(raw.buckets||[]);
+          const found=buckets.some(b=>b&&b.name==='yourz-product-files');
+          if(!found){
+            console.log('未找到现有 R2 桶 yourz-product-files，尚未部署。');
+            process.exit(1);
+          }
+          console.log('已确认现有 R2 桶 yourz-product-files 可见；不会新建或修改桶。');
+          NODE
+          rm -f /tmp/yourz-r2-buckets.json
+
       - name: 校验并解压网站程序
         shell: bash
         run: |
@@ -91,9 +117,31 @@ jobs:
           node deploy-fixes/enable-admin-diagnostics.mjs app/src/handler.js
           node deploy-fixes/enable-public-entry.mjs app
           node deploy-fixes/add-yourz-favicon.mjs app
-          cd app
+
+      - name: 安装并打包本地 Excel 预览依赖
+        working-directory: app
+        run: npm install --no-save --package-lock=false jszip@3.10.1
+
+      - name: 将共享文件库、供应商报价归档和 Excel 图片预览接入正式运行包
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check .github/scripts/fix-load-latest.mjs
+          node --check .github/scripts/add-safe-bulk-import.mjs
+          node --check .github/scripts/add-product-file-library.mjs
+          node --check .github/scripts/add-supplier-quote-archive.mjs
+          node --check .github/scripts/add-xlsx-inline-image-preview.mjs
+          node .github/scripts/fix-load-latest.mjs app
+          node .github/scripts/add-supplier-quote-archive.mjs app
+
+      - name: 检查生成后的正式运行包
+        working-directory: app
+        run: |
           npm run check
           node test-worker.mjs
+          node --check public/app.js
+          test -f public/vendor/jszip.min.js
+          grep -q "supplier-quotes=20261020-1&xlsx-images=20261020-1" public/index.html
 
       - name: 安装 Cloudflare 部署工具
         run: npm install --global wrangler@4
@@ -167,6 +215,10 @@ jobs:
           binding = "DB"
           database_name = "yourz-factory-db"
           database_id = "$DB_ID"
+
+          [[r2_buckets]]
+          binding = "FILES"
+          bucket_name = "yourz-product-files"
           EOF
 
       - name: 设置初始管理员
