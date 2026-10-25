@@ -83,7 +83,7 @@ test=test.replaceAll("9000000000","20000000000");
 test=test.replace('contentLength, origin = "https://yourz.example.test"','contentLength, partSize, origin = "https://yourz.example.test"');
 test=test.replace('if (contentLength !== undefined) headers.set("X-File-Size", String(contentLength)); }','if (contentLength !== undefined) headers.set("X-File-Size", String(contentLength)); if (partSize !== undefined) headers.set("X-Part-Size", String(partSize)); }');
 test=test.replace('assert.equal(viewerUpload.status,403);','assert.equal(viewerUpload.status,403);\nconst viewerMultipartStart = await rawRequest("/api/files/multipart?name=denied.pdf", { method:"POST", body:samplePdf, cookie:memberCookie, csrf:memberState.session.csrf, contentLength:samplePdf.byteLength });\nassert.equal(viewerMultipartStart.status,403, JSON.stringify(viewerMultipartStart.data));\nassert.equal(FILES.multipartUploads.size,0);');
-test=test.replace('const multipartStart = await rawRequest("/api/files/multipart?name="','const tooLargeMultipart = await rawRequest("/api/files/multipart?name=oversized.pdf", { method:"POST", body:samplePdf, cookie:adminCookie, csrf, contentLength:10000000001 });\nassert.equal(tooLargeMultipart.status,413, JSON.stringify(tooLargeMultipart.data));\nassert.equal(FILES.multipartUploads.size,0);\nconst multipartStart = await rawRequest("/api/files/multipart?name="');
+test=test.replace('const multipartStart = await rawRequest("/api/files/multipart?name="','const tooLargeMultipart = await rawRequest("/api/files/multipart?name=oversized.pdf", { method:"POST", body:samplePdf, cookie:adminCookie, csrf, contentLength:20000000001 });\nassert.equal(tooLargeMultipart.status,507, JSON.stringify(tooLargeMultipart.data));\nassert.equal(FILES.multipartUploads.size,0);\nconst multipartStart = await rawRequest("/api/files/multipart?name="');
 test=test.replace("constructor() { this.objects = new Map(); }","constructor() { this.objects = new Map(); this.multipartUploads = new Map(); }");
 const deleteMock='  async delete(key) { this.objects.delete(key); }';
 const multipartMock=[
@@ -123,6 +123,6 @@ if(!test.includes("const multipartStart =")) {
 }
 fs.writeFileSync(testFile,test);
 
-if(!html.includes("multipart-10gb=20261025-1")){const m=html.match(/(<script\b[^>]*\bsrc=["'][^"']*app\.js\?)([^"']*)(["'][^>]*>)/i);if(!m)throw Error("Could not find versioned app.js URL");html=html.replace(m[0],m[1]+m[2]+"&multipart-10gb=20261025-1"+m[3]);fs.writeFileSync(ix,html)}
-if(!h.includes("YOURZ_R2_MULTIPART_10GB_V1")||!a.includes("YOURZ_R2_MULTIPART_10GB_V1")||!html.includes("multipart-10gb=20261025-1"))throw Error("Multipart patch verification failed");
+if(!html.includes("multipart-nofilecap=20261026-1")){const m=html.match(/(<script\b[^>]*\bsrc=["'][^"']*app\.js\?)([^"']*)(["'][^>]*>)/i);if(!m)throw Error("Could not find versioned app.js URL");html=html.replace(m[0],m[1]+m[2]+"&multipart-nofilecap=20261026-1"+m[3]);fs.writeFileSync(ix,html)}
+if(!h.includes("YOURZ_R2_MULTIPART_10GB_V1")||!a.includes("YOURZ_R2_MULTIPART_10GB_V1")||!html.includes("multipart-nofilecap=20261026-1"))throw Error("Multipart patch verification failed");
 console.log("R2 multipart upload patch applied: no fixed per-file cap, 20 GB shared-storage cap, 16 MiB chunks, retries, CSRF/role checks, and streamed downloads.");
