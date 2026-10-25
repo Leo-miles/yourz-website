@@ -87,10 +87,16 @@ jobs:
 
           # This build applies the refresh, safe supplier JSON import, and shared product-file library patches; it contains no unrelated cloud-drive/audit changes.
           node .github/scripts/fix-load-latest.mjs app
+          node --check .github/scripts/add-supplier-quote-archive.mjs
+          node .github/scripts/add-supplier-quote-archive.mjs app
           node --check app/public/app.js
           cd app
           npm run check
           node test-worker.mjs
+          test -f public/vendor/jszip.min.js
+          grep -q "YOURZ_SUPPLIER_QUOTE_ARCHIVE_V1" public/app.js
+          grep -q "YOURZ_XLSX_INLINE_IMAGE_PREVIEW_V1" public/app.js
+          grep -q "supplier-quotes=20261020-1&xlsx-images=20261020-1" public/index.html
 
       - name: Install Cloudflare deployment tool
         run: npm install --global wrangler@4
@@ -192,7 +198,10 @@ jobs:
             'Loading latest… / 正在载入…',
             'YOURZ PRODUCT FILE LIBRARY V1',
             'Shared product files / 产品资料文件库',
-            'parseXlsxPreview'
+            'parseXlsxPreview',
+            'YOURZ_SUPPLIER_QUOTE_ARCHIVE_V1',
+            'YOURZ_XLSX_INLINE_IMAGE_PREVIEW_V1',
+            'Supplier quotes & product images'
           ];
           if (indexStatus !== '200' || !markers.every(item => html.includes(item))) {
             console.error('Immutable deployment HTML does not reference the versioned refresh script.');
@@ -219,7 +228,10 @@ jobs:
             "cache:'no-store'",
             'Loaded latest data / 已载入最新资料',
             "button.setAttribute('aria-busy','true')",
-            'Loading latest… / 正在载入…'
+            'Loading latest… / 正在载入…',
+            'YOURZ_SUPPLIER_QUOTE_ARCHIVE_V1',
+            'YOURZ_XLSX_INLINE_IMAGE_PREVIEW_V1',
+            'Supplier quotes & product images'
           ];
           if (indexStatus !== '200' || !markers.every(item => html.includes(item))) {
             console.error('yourz.top HTML does not reference the versioned refresh script yet; deployment not considered verified.');
