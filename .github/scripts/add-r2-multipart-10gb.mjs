@@ -22,7 +22,7 @@ if(!h.includes("YOURZ_R2_MULTIPART_10GB_V1")){
 '    const contentType=PRODUCT_FILE_MIME[extension]; if(!contentType)fail(415,"Unsupported file format / 不支持的文件格式");',
 '    const size=Number(request.headers.get("X-File-Size")||0); if(!Number.isSafeInteger(size)||size<=0)fail(411,"Upload size is required / 缺少文件大小");',
 '    if(size>MAX_PRODUCT_FILE_BYTES)fail(413,"Maximum file size is 10 GB / 单个文件最大10GB");',
-'    const id=token(),objectKey="uploads/"+id;',
+'    const staleRows=await env.DB.prepare("SELECT id,upload_id,object_key FROM multipart_file_uploads WHERE created_at < ?").bind(new Date(Date.now()-24*60*60*1000).toISOString()).all(); for(const stale of (staleRows.results||[])){try{await env.FILES.resumeMultipartUpload(stale.object_key,stale.upload_id).abort()}catch{} try{await env.DB.batch([env.DB.prepare("DELETE FROM multipart_file_uploads WHERE id=?").bind(stale.id),env.DB.prepare("DELETE FROM file_upload_reservations WHERE id=?").bind(stale.id)])}catch{}} const id=token(),objectKey="uploads/"+id;',
 '    const reservation=await env.DB.prepare("INSERT INTO file_upload_reservations(id,size,created_at) SELECT ?,?,? WHERE (COALESCE((SELECT SUM(size) FROM uploaded_files),0)+COALESCE((SELECT SUM(size) FROM file_upload_reservations),0)+?)<=?").bind(id,size,stamp(),size,MAX_TOTAL_PRODUCT_FILE_BYTES).run();',
 '    if(Number(reservation?.meta?.changes||0)!==1)fail(507,"Shared storage limit reached (20 GB) / 共享存储达到20GB上限");',
 '    let multipart; try { multipart=await env.FILES.createMultipartUpload(objectKey,{httpMetadata:{contentType},customMetadata:{fileId:id,uploadedBy:session.userId}}); await env.DB.prepare("INSERT INTO multipart_file_uploads(id,upload_id,object_key,file_name,content_type,size,uploaded_by,created_at) VALUES(?,?,?,?,?,?,?,?)").bind(id,multipart.uploadId,objectKey,fileName,contentType,size,session.userId,stamp()).run(); } catch(error) { if(multipart)try{await multipart.abort()}catch{} try{await env.DB.prepare("DELETE FROM file_upload_reservations WHERE id=?").bind(id).run()}catch{} fail(502,"Could not start multipart upload / 无法启动分片上传"); }',
@@ -71,6 +71,8 @@ if(!a.includes("YOURZ_R2_MULTIPART_10GB_V1")){
  a=a.replace("单个文件最大20MB，共享存储设有9GB安全上限。","单个文件最大10GB，共享存储设有20GB安全上限。");
  a=a.replace("productFileStorageLimit=9000000000","productFileStorageLimit=20000000000");
  const d='case "download":{const file=productFileRows.find(row=>row.id===id);const blob=await getProductFileBlob(id,true);downloadProductBlob(blob,file?.file_name||"product-file");break;}';
+ const previewAnchor='if(!file)throw Error("Reload the file list and retry / 请刷新文件列表后重试");const blob=await getProductFileBlob(id,false);';
+ if(a.includes(previewAnchor))a=a.replace(previewAnchor,'if(!file)throw Error("Reload the file list and retry / 请刷新文件列表后重试");if(file.size>100*1024*1024)throw Error("Files over 100 MB must be downloaded to avoid browser memory issues / 超过100MB的文件请下载查看，避免浏览器内存不足");const blob=await getProductFileBlob(id,false);');
  if(a.includes(d))a=a.replace(d,'case "download":{const file=productFileRows.find(row=>row.id===id);const link=document.createElement("a");link.href="/api/files/"+encodeURIComponent(id)+"/content?download=1";link.download=file?.file_name||"product-file";link.rel="noopener";document.body.append(link);link.click();link.remove();break;}');
  a=a.replace("/* YOURZ PRODUCT FILE LIBRARY V1 HELPERS */","/* YOURZ PRODUCT FILE LIBRARY V1 HELPERS */\n /* YOURZ_R2_MULTIPART_10GB_V1 */");
  fs.writeFileSync(af,a);
@@ -81,7 +83,7 @@ test=test.replaceAll("9000000000","20000000000");
 test=test.replace("constructor() { this.objects = new Map(); }","constructor() { this.objects = new Map(); this.multipartUploads = new Map(); }");
 const deleteMock='  async delete(key) { this.objects.delete(key); }';
 const multipartMock=[
-'  async createMultipartUpload(key, options = {}) { const uploadId = "mock-upload-" + (this.multipartUploads.size + 1); this.multipartUploads.set(uploadId, { key, options, parts:new Map() }); return this.resumeMultipartUpload(key, uploadId); }',
+'  async createMultipartUpload(key, options = {}) { const uploadId = "mock-upload-" + (this.multipartUploads.size + 1); this.multipartUploads.set(uploadId, { key, options, parts:new Map() }); return Object.assign(this.resumeMultipartUpload(key, uploadId), { uploadId }); }',
 '  resumeMultipartUpload(key, uploadId) {',
 '    const state = this.multipartUploads.get(uploadId); if (!state || state.key !== key) throw new Error("Missing mock multipart upload");',
 '    return {',
