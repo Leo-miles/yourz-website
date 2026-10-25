@@ -1,4 +1,4 @@
-name: Test 10 GB R2 multipart upload (no deployment)
+name: Test uncapped-per-file R2 multipart upload (no deployment)
 
 on:
   pull_request:
@@ -42,7 +42,7 @@ jobs:
       - name: Install local preview dependency
         run: npm install --prefix app --no-save --package-lock=false jszip@3.10.1
 
-      - name: Apply existing application patches and 10 GB multipart implementation
+      - name: Apply existing application patches and multipart implementation
         shell: bash
         run: |
           set -euo pipefail
@@ -65,6 +65,6 @@ jobs:
           node --check public/app.js
           grep -q "YOURZ_R2_MULTIPART_10GB_V1" src/handler.js
           grep -q "YOURZ_R2_MULTIPART_10GB_V1" public/app.js
-          grep -q "MAX_PRODUCT_FILE_BYTES = 10_000_000_000" src/handler.js
+          grep -q "MAX_SINGLE_PRODUCT_FILE_BYTES = 20 \* 1024 \* 1024" src/handler.js
           grep -q "MAX_TOTAL_PRODUCT_FILE_BYTES = 20_000_000_000" src/handler.js
           grep -q "multipart-10gb=20261025-1" public/index.html
