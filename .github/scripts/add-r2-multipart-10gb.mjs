@@ -102,7 +102,7 @@ const multipartTests=[
 'const multipartStart = await rawRequest("/api/files/multipart?name=" + encodeURIComponent("分片测试.pdf"), { method:"POST", body:samplePdf, cookie:adminCookie, csrf, contentLength:samplePdf.byteLength });',
 'assert.equal(multipartStart.status,201, JSON.stringify(multipartStart.data));',
 'const multipartId = multipartStart.data.uploadId;',
-'const multipartPart = await rawRequest("/api/files/multipart/" + multipartId + "/part?partNumber=1", { method:"PUT", body:samplePdf, cookie:adminCookie, csrf, contentLength:samplePdf.byteLength });',
+'const multipartPart = await rawRequest("/api/files/multipart/" + multipartId + "/part?partNumber=1", { method:"PUT", body:samplePdf, cookie:adminCookie, csrf, contentLength:samplePdf.byteLength, partSize:samplePdf.byteLength });',
 'assert.equal(multipartPart.status,200, JSON.stringify(multipartPart.data));',
 'const multipartComplete = await request("/api/files/multipart/" + multipartId + "/complete", { method:"POST", body:{parts:[{partNumber:1,etag:"etag-1"}]}, cookie:adminCookie, csrf });',
 'assert.equal(multipartComplete.status,201, await multipartComplete.clone().text());',
