@@ -110,7 +110,7 @@ const multipartTests=[
 'assert.equal(multipartComplete.status,201, await multipartComplete.clone().text());',
 'const multipartFile = await multipartComplete.json();',
 'assert.equal(multipartFile.file.file_name,"分片测试.pdf");',
-'assert.deepEqual(Array.from(FILES.objects.values())[0].bytes,Array.from(samplePdf));',
+'assert.deepEqual(Array.from(Array.from(FILES.objects.values())[0].bytes),Array.from(samplePdf));',
 'const multipartDelete = await request("/api/files/" + multipartId, { method:"DELETE", body:{}, cookie:adminCookie, csrf });',
 'assert.equal(multipartDelete.status,200, await multipartDelete.clone().text());',
 'assert.equal(FILES.objects.size,0);'
