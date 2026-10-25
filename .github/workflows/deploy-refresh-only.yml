@@ -90,8 +90,8 @@ jobs:
           node .github/scripts/fix-load-latest.mjs app
           node --check .github/scripts/add-supplier-quote-archive.mjs
           node .github/scripts/add-supplier-quote-archive.mjs app
-          node --check .github/scripts/fix-upload-limit-90mb.mjs
-          node .github/scripts/fix-upload-limit-90mb.mjs app
+          node --check .github/scripts/add-r2-multipart-10gb.mjs
+          node .github/scripts/add-r2-multipart-10gb.mjs app
           node --check app/public/app.js
           cd app
           npm run check
@@ -99,8 +99,10 @@ jobs:
           test -f public/vendor/jszip.min.js
           grep -q "YOURZ_SUPPLIER_QUOTE_ARCHIVE_V1" public/app.js
           grep -q "YOURZ_XLSX_INLINE_IMAGE_PREVIEW_V1" public/app.js
-          grep -q "supplier-quotes=20261020-1&xlsx-images=20261020-1&upload-limit=20261025-1" public/index.html
-          grep -q "const MAX_PRODUCT_FILE_BYTES = 90 * 1024 * 1024" public/app.js
+          grep -q "multipart-10gb=20261025-1" public/index.html
+          grep -q "YOURZ_R2_MULTIPART_10GB_V1" public/app.js
+          grep -q "MAX_PRODUCT_FILE_BYTES = 10_000_000_000" src/handler.js
+          grep -q "MAX_TOTAL_PRODUCT_FILE_BYTES = 20_000_000_000" src/handler.js
 
       - name: Install Cloudflare deployment tool
         run: npm install --global wrangler@4
