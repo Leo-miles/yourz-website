@@ -21,7 +21,7 @@ if(!h.includes("YOURZ_R2_MULTIPART_10GB_V1")){
 '    const extension=fileName.includes(".")?fileName.split(".").pop().toLowerCase():"";',
 '    const contentType=PRODUCT_FILE_MIME[extension]; if(!contentType)fail(415,"Unsupported file format / 不支持的文件格式");',
 '    const size=Number(request.headers.get("X-File-Size")||0); if(!Number.isSafeInteger(size)||size<=0)fail(411,"Upload size is required / 缺少文件大小");',
-'    if(size>MAX_PRODUCT_FILE_BYTES)fail(413,"Maximum file size is 10 GB / 单个文件最大10GB");',
+'    /* No separate per-file cap: the shared-storage quota is enforced by the reservation below. */',
 '    const staleRows=await env.DB.prepare("SELECT id,upload_id,object_key FROM multipart_file_uploads WHERE created_at < ?").bind(new Date(Date.now()-24*60*60*1000).toISOString()).all(); for(const stale of (staleRows.results||[])){try{await env.FILES.resumeMultipartUpload(stale.object_key,stale.upload_id).abort()}catch{} try{await env.DB.batch([env.DB.prepare("DELETE FROM multipart_file_uploads WHERE id=?").bind(stale.id),env.DB.prepare("DELETE FROM file_upload_reservations WHERE id=?").bind(stale.id)])}catch{}} const id=token(),objectKey="uploads/"+id;',
 '    const reservation=await env.DB.prepare("INSERT INTO file_upload_reservations(id,size,created_at) SELECT ?,?,? WHERE (COALESCE((SELECT SUM(size) FROM uploaded_files),0)+COALESCE((SELECT SUM(size) FROM file_upload_reservations),0)+?)<=?").bind(id,size,stamp(),size,MAX_TOTAL_PRODUCT_FILE_BYTES).run();',
 '    if(Number(reservation?.meta?.changes||0)!==1)fail(507,"Shared storage limit reached (20 GB) / 共享存储达到20GB上限");',
@@ -58,7 +58,7 @@ if(!a.includes("YOURZ_R2_MULTIPART_10GB_V1")){
 ' async function uploadProductFiles(files){',
 '  if(!canEdit())throw Error("Upload permission required / 需要上传权限");if(stale||busy)throw Error("Load latest records and finish saving first / 请先载入最新资料并完成保存");',
 '  const progress=document.getElementById("productFileProgress"),input=document.getElementById("productFileInput");let done=0;const failed=[],chunkSize=16*1024*1024;productFilePage=1;',
-'  for(const file of files){if(file.size<=0){failed.push(file.name+": empty");continue}if(file.size>10_000_000_000){failed.push(file.name+": exceeds 10 GB");continue}let id="",complete=false;',
+'  for(const file of files){if(file.size<=0){failed.push(file.name+": empty");continue}let id="",complete=false;',
 '   try{if(progress)progress.textContent="Starting / 正在创建任务: "+file.name;const s=await fetch("/api/files/multipart?name="+encodeURIComponent(file.name),{method:"POST",credentials:"same-origin",cache:"no-store",headers:{"X-CSRF-Token":session?.csrf||"","X-File-Size":String(file.size)}});let sd={};try{sd=await s.json()}catch{}if(!s.ok)throw Error(sd.error||("HTTP "+s.status));id=sd.uploadId;if(!id)throw Error("No upload session");',
 '    const parts=[],count=Math.ceil(file.size/chunkSize);for(let i=0;i<count;i++){const blob=file.slice(i*chunkSize,Math.min(file.size,(i+1)*chunkSize));let result=null,last=null;for(let n=1;n<=3;n++){try{if(progress)progress.textContent="Uploading / 正在上传 "+file.name+" "+Math.round((i+1)/count*100)+"% ("+(i+1)+"/"+count+")";const r=await fetch("/api/files/multipart/"+encodeURIComponent(id)+"/part?partNumber="+(i+1),{method:"PUT",credentials:"same-origin",cache:"no-store",headers:{"X-CSRF-Token":session?.csrf||"","Content-Type":"application/octet-stream","X-Part-Size":String(blob.size)},body:blob});let d={};try{d=await r.json()}catch{}if(!r.ok)throw Error(d.error||("HTTP "+r.status));result=d;break}catch(e){last=e}}if(!result)throw last||Error("Part upload failed");parts.push({partNumber:i+1,etag:result.etag})}',
 '    if(progress)progress.textContent="Finalizing / 正在完成上传: "+file.name;await api("/api/files/multipart/"+encodeURIComponent(id)+"/complete",{method:"POST",body:{parts}});complete=true;done++',
@@ -67,8 +67,8 @@ if(!a.includes("YOURZ_R2_MULTIPART_10GB_V1")){
 ' }'
 ].join("\n");
  a=a.slice(0,start)+replacement+a.slice(end);
- a=a.replace("Each file can be up to 20 MB; shared storage has a 9 GB safety cap.","Each file can be up to 10 GB; shared storage has a 20 GB safety cap.");
- a=a.replace("单个文件最大20MB，共享存储设有9GB安全上限。","单个文件最大10GB，共享存储设有20GB安全上限。");
+ a=a.replace("Each file can be up to 20 MB; shared storage has a 9 GB safety cap.","No fixed per-file upload limit; shared storage has a 20 GB total cap.");
+ a=a.replace("单个文件最大20MB，共享存储设有9GB安全上限。","单个文件不设固定上传上限，共享存储总容量上限为20GB。");
  a=a.replace("productFileStorageLimit=9000000000","productFileStorageLimit=20000000000");
  const d='case "download":{const file=productFileRows.find(row=>row.id===id);const blob=await getProductFileBlob(id,true);downloadProductBlob(blob,file?.file_name||"product-file");break;}';
  const previewAnchor='if(!file)throw Error("Reload the file list and retry / 请刷新文件列表后重试");const blob=await getProductFileBlob(id,false);';
@@ -125,4 +125,4 @@ fs.writeFileSync(testFile,test);
 
 if(!html.includes("multipart-10gb=20261025-1")){const m=html.match(/(<script\b[^>]*\bsrc=["'][^"']*app\.js\?)([^"']*)(["'][^>]*>)/i);if(!m)throw Error("Could not find versioned app.js URL");html=html.replace(m[0],m[1]+m[2]+"&multipart-10gb=20261025-1"+m[3]);fs.writeFileSync(ix,html)}
 if(!h.includes("YOURZ_R2_MULTIPART_10GB_V1")||!a.includes("YOURZ_R2_MULTIPART_10GB_V1")||!html.includes("multipart-10gb=20261025-1"))throw Error("Multipart patch verification failed");
-console.log("R2 multipart upload patch applied: 10 GB file cap, 20 GB shared cap, 16 MiB chunks, retries, CSRF/role checks, and streamed downloads.");
+console.log("R2 multipart upload patch applied: no fixed per-file cap, 20 GB shared-storage cap, 16 MiB chunks, retries, CSRF/role checks, and streamed downloads.");
