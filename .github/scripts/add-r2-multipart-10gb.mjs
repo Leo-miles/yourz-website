@@ -97,7 +97,7 @@ if(!test.includes("resumeMultipartUpload(")){
  if(!test.includes(deleteMock))throw new Error("R2 test mock anchor missing");
  test=test.replace(deleteMock,deleteMock+"\n"+multipartMock);
 }
-const quotaAnchor='const quotaDenied = await rawRequest("/api/files?name=quota.pdf"';
+const quotaAnchor='await DB.prepare("INSERT INTO uploaded_files(id,file_name,content_type,size,object_key,uploaded_by,uploaded_at)").bind("quota-full"';
 const multipartTests=[
 'const multipartStart = await rawRequest("/api/files/multipart?name=" + encodeURIComponent("分片测试.pdf"), { method:"POST", body:samplePdf, cookie:adminCookie, csrf, contentLength:samplePdf.byteLength });',
 'assert.equal(multipartStart.status,201, JSON.stringify(multipartStart.data));',
