@@ -1,0 +1,70 @@
+name: Test 10 GB R2 multipart upload (no deployment)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/scripts/add-r2-multipart-10gb.mjs"
+      - ".github/scripts/fix-load-latest.mjs"
+      - ".github/scripts/add-product-file-library.mjs"
+      - ".github/workflows/test-r2-multipart.yml"
+      - "yourz-runtime.tar.xz"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-build:
+    name: Build and test in isolated workspace only
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout test branch
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Verify runtime archive and extract locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "a67d49b9fe80fa901b113eb29541609d2c19c543e459ae758de3e2267ef9b15c  yourz-runtime.tar.xz" | sha256sum -c -
+          mkdir -p app
+          tar -xJf yourz-runtime.tar.xz -C app
+          node deploy-fixes/enable-admin-diagnostics.mjs app/src/handler.js
+          node deploy-fixes/enable-public-entry.mjs app
+          node deploy-fixes/add-yourz-favicon.mjs app
+
+      - name: Install local preview dependency
+        run: npm install --prefix app --no-save --package-lock=false jszip@3.10.1
+
+      - name: Apply existing application patches and 10 GB multipart implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check .github/scripts/fix-load-latest.mjs
+          node --check .github/scripts/add-product-file-library.mjs
+          node --check .github/scripts/add-supplier-quote-archive.mjs
+          node --check .github/scripts/add-r2-multipart-10gb.mjs
+          node .github/scripts/fix-load-latest.mjs app
+          node .github/scripts/add-supplier-quote-archive.mjs app
+          node .github/scripts/add-r2-multipart-10gb.mjs app
+
+      - name: Static and isolated runtime tests (no Cloudflare credentials)
+        working-directory: app
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run check
+          node test-worker.mjs
+          node --check src/handler.js
+          node --check public/app.js
+          grep -q "YOURZ_R2_MULTIPART_10GB_V1" src/handler.js
+          grep -q "YOURZ_R2_MULTIPART_10GB_V1" public/app.js
+          grep -q "MAX_PRODUCT_FILE_BYTES = 10_000_000_000" src/handler.js
+          grep -q "MAX_TOTAL_PRODUCT_FILE_BYTES = 20_000_000_000" src/handler.js
+          grep -q "multipart-10gb=20261025-1" public/index.html
