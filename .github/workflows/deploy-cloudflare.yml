@@ -117,6 +117,8 @@ jobs:
           node deploy-fixes/enable-admin-diagnostics.mjs app/src/handler.js
           node deploy-fixes/enable-public-entry.mjs app
           node deploy-fixes/add-yourz-favicon.mjs app
+          node --check .github/scripts/fix-chinese-ime.mjs
+          node .github/scripts/fix-chinese-ime.mjs app/public/app.js
 
       - name: 安装并打包本地 Excel 预览依赖
         working-directory: app
