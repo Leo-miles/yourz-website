@@ -6,6 +6,7 @@ on:
       - test/ime-runtime-inspection
     paths:
       - .github/workflows/inspect-runtime-ime.yml
+      - .github/scripts/fix-chinese-ime.mjs
 
 permissions:
   contents: read
@@ -16,22 +17,25 @@ jobs:
     steps:
       - name: Checkout test branch
         uses: actions/checkout@v4
-      - name: Extract runtime without deploying
+      - name: Extract runtime and apply IME patch without deploying
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p app
           tar -xJf yourz-runtime.tar.xz -C app
-          echo "=== candidate JS files ==="
-          find app -type f \( -name 'app.js' -o -name '*.html' \) | head -80
-          echo "=== IME/input event references ==="
-          grep -RniE 'composition(start|end)|beforeinput|isComposing|addEventListener\(["'\''"]input|oninput|supplier|placeholder' app/public app/src 2>/dev/null | head -300 || true
-      - name: Upload relevant runtime source for review
+          node .github/scripts/fix-chinese-ime.mjs app/public/app.js
+          node --check app/public/app.js
+          grep -q "search.addEventListener('compositionstart'" app/public/app.js
+          grep -q "if(composing||e.isComposing)return" app/public/app.js
+          echo "PASS: runtime patched; JavaScript syntax valid; composition guard present."
+          echo "=== patched search handler ==="
+          grep -o "const search=document.getElementById('search').*if(search){let composing=false;.*" app/public/app.js | head -c 2500 || true
+      - name: Upload patched runtime source for review
         uses: actions/upload-artifact@v4
         with:
-          name: ime-runtime-source
+          name: ime-runtime-source-patched
           path: |
             app/public/app.js
-            app/index.html
-          if-no-files-found: warn
+            app/public/index.html
+          if-no-files-found: error
           retention-days: 3
