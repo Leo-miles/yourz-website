@@ -133,6 +133,8 @@ jobs:
           node --check .github/scripts/add-xlsx-inline-image-preview.mjs
           node .github/scripts/fix-load-latest.mjs app
           node .github/scripts/add-supplier-quote-archive.mjs app
+          node --check .github/scripts/add-r2-multipart-10gb.mjs
+          node .github/scripts/add-r2-multipart-10gb.mjs app
 
       - name: 检查生成后的正式运行包
         working-directory: app
@@ -141,7 +143,10 @@ jobs:
           node test-worker.mjs
           node --check public/app.js
           test -f public/vendor/jszip.min.js
-          grep -q "supplier-quotes=20261020-1&xlsx-images=20261020-1" public/index.html
+          grep -q "multipart-nofilecap=20261026-1" public/index.html
+          grep -q "YOURZ_R2_MULTIPART_10GB_V1" public/app.js
+          grep -q "MAX_SINGLE_PRODUCT_FILE_BYTES = 20 \\* 1024 \\* 1024" src/handler.js
+          grep -q "MAX_TOTAL_PRODUCT_FILE_BYTES = 20_000_000_000" src/handler.js
 
       - name: 安装 Cloudflare 部署工具
         run: npm install --global wrangler@4
