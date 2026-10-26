@@ -27,6 +27,12 @@ jobs:
           node --check app/public/app.js
           grep -q "search.addEventListener('compositionstart'" app/public/app.js
           grep -q "if(composing||e.isComposing)return" app/public/app.js
+          grep -q "modal.querySelector('form').oninput=()=>dirty=true" app/public/app.js
+          if grep -nE 'oninput=.*render\(\)|addEventListener\(["'\''"]input["'\''"].*render\(\)' app/public/app.js | grep -v "const search=document.getElementById('search')"; then
+            echo "Review: additional input handlers may rerender the app; inspect the lines above."
+          else
+            echo "PASS: no other direct input-to-render handler found by static scan."
+          fi
           echo "PASS: runtime patched; JavaScript syntax valid; composition guard present."
           echo "=== patched search handler ==="
           grep -o "const search=document.getElementById('search').*if(search){let composing=false;.*" app/public/app.js | head -c 2500 || true
