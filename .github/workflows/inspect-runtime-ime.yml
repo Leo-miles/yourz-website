@@ -1,0 +1,37 @@
+name: Inspect runtime for IME issue
+
+on:
+  push:
+    branches:
+      - test/ime-runtime-inspection
+    paths:
+      - .github/workflows/inspect-runtime-ime.yml
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout test branch
+        uses: actions/checkout@v4
+      - name: Extract runtime without deploying
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p app
+          tar -xJf yourz-runtime.tar.xz -C app
+          echo "=== candidate JS files ==="
+          find app -type f \( -name 'app.js' -o -name '*.html' \) | head -80
+          echo "=== IME/input event references ==="
+          grep -RniE 'composition(start|end)|beforeinput|isComposing|addEventListener\(["'\''"]input|oninput|supplier|placeholder' app/public app/src 2>/dev/null | head -300 || true
+      - name: Upload relevant runtime source for review
+        uses: actions/upload-artifact@v4
+        with:
+          name: ime-runtime-source
+          path: |
+            app/public/app.js
+            app/index.html
+          if-no-files-found: warn
+          retention-days: 3
