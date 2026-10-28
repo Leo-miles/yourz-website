@@ -33,8 +33,8 @@ if (!handler.includes("YOURZ_SUPPLIER_MULTIPART_UPLOAD_V1")) {
     '    const category=supplierId?(requestedCategory||(imageExtensions.includes(fileName.split(".").pop().toLowerCase())?"image":"quote")):"general";',
     '    if(!["general","quote","image","other"].includes(category))fail(400,"File category is invalid / 文件分类无效");',
     '    if(supplierId){const supplier=await supplierQuoteOwner(env.DB,supplierId);if(!supplier||supplier.status==="deleted")fail(404,"Active supplier not found / 找不到有效供应商");}',
-    '    if(category==="image"&&!imageExtensions.includes(extension))fail(415,"Product images must be PNG, JPG or WebP / 产品图片仅支持 PNG、JPG 或 WebP");',
-    '    if(supplierId&&category==="quote"&&imageExtensions.includes(extension))fail(415,"Choose the Product image category for image files / 图片文件请选择“产品图片”分类");'
+    '    if(category==="image"&&!imageExtensions.includes(fileName.split(".").pop().toLowerCase()))fail(415,"Product images must be PNG, JPG or WebP / 产品图片仅支持 PNG、JPG 或 WebP");',
+    '    if(supplierId&&category==="quote"&&imageExtensions.includes(fileName.split(".").pop().toLowerCase()))fail(415,"Choose the Product image category for image files / 图片文件请选择“产品图片”分类");'
   ].join("\n");
   handler = replaceOnce(handler, startFile, startFilePatch, "read supplier association on multipart start");
 
