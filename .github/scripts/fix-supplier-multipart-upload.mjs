@@ -17,7 +17,7 @@ if (!handler.includes("YOURZ_SUPPLIER_MULTIPART_UPLOAD_V1")) {
   const schema = 'await db.prepare("CREATE TABLE IF NOT EXISTS multipart_file_uploads (id TEXT PRIMARY KEY, upload_id TEXT NOT NULL, object_key TEXT NOT NULL UNIQUE, file_name TEXT NOT NULL, content_type TEXT NOT NULL, size INTEGER NOT NULL, uploaded_by TEXT NOT NULL, created_at TEXT NOT NULL)").run();';
   const migrations = [
     schema,
-    '  for (const sql of ["ALTER TABLE multipart_file_uploads ADD COLUMN supplier_id TEXT", "ALTER TABLE multipart_file_uploads ADD COLUMN file_category TEXT NOT NULL DEFAULT \\'general\\'"]) {',
+    '  for (const sql of ["ALTER TABLE multipart_file_uploads ADD COLUMN supplier_id TEXT", "ALTER TABLE multipart_file_uploads ADD COLUMN file_category TEXT NOT NULL DEFAULT \'general\'"]) {',
     '    try { await db.prepare(sql).run(); } catch (error) { if (!/duplicate column name/i.test(String(error?.message || error))) throw error; }',
     '  }'
   ].join("\n");
