@@ -137,6 +137,8 @@ jobs:
           node .github/scripts/add-supplier-quote-archive.mjs app
           node --check .github/scripts/add-r2-multipart-10gb.mjs
           node .github/scripts/add-r2-multipart-10gb.mjs app
+          node --check .github/scripts/fix-supplier-multipart-upload.mjs
+          node .github/scripts/fix-supplier-multipart-upload.mjs app
 
       - name: 检查生成后的正式运行包
         working-directory: app
@@ -147,6 +149,9 @@ jobs:
           test -f public/vendor/jszip.min.js
           grep -q "multipart-nofilecap=20261026-1" public/index.html
           grep -q "YOURZ_R2_MULTIPART_10GB_V1" public/app.js
+          grep -q "YOURZ_SUPPLIER_MULTIPART_UPLOAD_V1" public/app.js
+          grep -q "YOURZ_SUPPLIER_MULTIPART_UPLOAD_V1" src/handler.js
+          ! grep -q "file.size>20\*1024\*1024" public/app.js
           grep -q "MAX_SINGLE_PRODUCT_FILE_BYTES = 20 \\* 1024 \\* 1024" src/handler.js
           grep -q "MAX_TOTAL_PRODUCT_FILE_BYTES = 20_000_000_000" src/handler.js
 
