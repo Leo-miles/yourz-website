@@ -1,8 +1,11 @@
 name: Validate supplier large-file multipart upload
 
 on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
   push:
-    branches: [fix/supplier-large-file-multipart]
+    branches: [main, fix/supplier-large-file-multipart]
     paths:
       - ".github/scripts/**"
       - ".github/workflows/test-supplier-multipart.yml"
@@ -44,6 +47,7 @@ jobs:
           cd app
           npm run check
           node test-worker.mjs
+          node ../.github/scripts/test-supplier-multipart-upload.mjs .
           node --check src/handler.js
           node --check public/app.js
           grep -q "YOURZ_R2_MULTIPART_10GB_V1" public/app.js
