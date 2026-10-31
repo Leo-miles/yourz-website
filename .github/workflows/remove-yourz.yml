@@ -1,0 +1,108 @@
+name: Remove YOURZ Cloudflare resources
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/remove-yourz.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: write
+jobs:
+  remove:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Cancel older YOURZ workflows
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          node --input-type=module <<'NODE'
+          const root='https://api.github.com/repos/'+process.env.REPOSITORY;
+          const headers={Authorization:'Bearer '+process.env.GH_TOKEN,Accept:'application/vnd.github+json'};
+          for(const status of ['queued','in_progress','waiting','requested','pending']){
+            const r=await fetch(root+'/actions/runs?per_page=100&status='+status,{headers});
+            if(!r.ok) throw new Error('Cannot inspect existing runs: '+r.status);
+            for(const run of (await r.json()).workflow_runs||[]){
+              if(String(run.id)===process.env.RUN_ID) continue;
+              const c=await fetch(root+'/actions/runs/'+run.id+'/cancel',{method:'POST',headers});
+              if(!c.ok && c.status!==409) throw new Error('Cannot cancel run '+run.id+': '+c.status);
+              console.log('Cancelled earlier workflow '+run.id);
+            }
+          }
+          NODE
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Delete and verify exact YOURZ resources
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          node --input-type=module <<'NODE'
+          const account = process.env.CLOUDFLARE_ACCOUNT_ID;
+          const token = process.env.CLOUDFLARE_API_TOKEN;
+          if (!account || !token) throw new Error('Missing existing Cloudflare credentials');
+          const root = 'https://api.cloudflare.com/client/v4';
+          async function api(path, method='GET', allowMissing=false) {
+            const r=await fetch(root+path,{method,headers:{Authorization:'Bearer '+token},signal:AbortSignal.timeout(30000)});
+            const b=await r.json();
+            if (allowMissing && r.status===404) return null;
+            if (!r.ok || b.success!==true) throw new Error(method+' '+path.replace(account,'ACCOUNT')+' HTTP '+r.status+' codes '+(b.errors||[]).map(e=>e.code).join(','));
+            return b;
+          }
+          let failures=0;
+          async function task(label, fn) {
+           try {await fn();console.log('VERIFIED: '+label);}
+           catch(e){failures++;console.error('FAILED: '+label+': '+e.message);}
+          }
+          const a='/accounts/'+account;
+          await task('YOURZ Pages website removed',async()=>{
+           const path=a+'/pages/projects/yourz-website';
+           const p=await api(path,'GET',true);
+           if(p) {
+            // Remove only domains attached to this exact project.
+            const domains=await api(path+'/domains');
+            for(const d of domains.result||[]) await api(path+'/domains/'+encodeURIComponent(d.name),'DELETE');
+            await api(path,'DELETE');
+           }
+           if(await api(path,'GET',true)) throw new Error('Project still exists');
+          });
+          await task('YOURZ R2 bucket removed',async()=>{
+           const path=a+'/r2/buckets/yourz-product-files';
+           const bucket=await api(path,'GET',true);
+           if(bucket) await api(path,'DELETE');
+           if(await api(path,'GET',true)) throw new Error('Bucket still exists');
+          });
+          await task('YOURZ D1 database removed',async()=>{
+           async function find() {
+            const matches=[];
+            for(let page=1;page<=100;page++){
+             const b=await api(a+'/d1/database?per_page=100&page='+page);
+             matches.push(...(b.result||[]).filter(d=>d.name==='yourz-factory-db'));
+             if((b.result||[]).length<100) return matches;
+            }
+            throw new Error('Database pagination exceeded bound');
+           }
+           const matches=await find();
+           if(matches.length>1) throw new Error('Ambiguous duplicate database names');
+           for(const d of matches) await api(a+'/d1/database/'+encodeURIComponent(d.uuid||d.id),'DELETE');
+           if((await find()).length) throw new Error('Database still exists');
+          });
+          await task('YOURZ website DNS pointer removed',async()=>{
+           const zones=await api('/zones?name=yourz.top');
+           for(const z of zones.result||[]){
+            if(z.name!=='yourz.top') continue;
+            const b=await api('/zones/'+z.id+'/dns_records?type=CNAME&name=yourz.top');
+            for(const r of b.result||[]) {
+             if(r.type==='CNAME' && r.name==='yourz.top' && r.content.replace(/\.$/,'').toLowerCase()==='yourz-website.pages.dev')
+              await api('/zones/'+z.id+'/dns_records/'+r.id,'DELETE');
+            }
+            const check=await api('/zones/'+z.id+'/dns_records?type=CNAME&name=yourz.top');
+            if((check.result||[]).some(r=>r.content.replace(/\.$/,'').toLowerCase()==='yourz-website.pages.dev')) throw new Error('Website CNAME still exists');
+           }
+          });
+          if(failures) process.exitCode=1;
+          
+          NODE
