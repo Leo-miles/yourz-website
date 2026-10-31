@@ -111,7 +111,7 @@ if (!app.includes("YOURZ_SUPPLIER_MULTIPART_UPLOAD_V1")) {
     '     const blob=file.slice(i*chunkSize,Math.min(file.size,(i+1)*chunkSize));let result=null,lastError=null;',
     '     for(let attempt=1;attempt<=3;attempt++){try{',
     '      if(progress)progress.textContent="Uploading / 正在上传 "+file.name+" "+Math.round((i+1)/count*100)+"% ("+(i+1)+"/"+count+")";',
-    '      const response=await fetch("/api/files/multipart/"+encodeURIComponent(uploadId)+"/part?partNumber="+(i+1),{method:"PUT",credentials:"same-origin",cache:"no-store",headers:{"X-CSRF-Token":session?.csrf||"","Content-Type":"application/octet-stream","X-Part-Size":String(blob.size)},body:blob});',
+    '      const response=await fetch("/api/files/multipart/"+encodeURIComponent(uploadId)+"/part?partNumber="+(i+1),{method:"PUT",credentials:"same-origin",cache:"no-store",headers:{"X-CSRF-Token":session?.csrf||"","Content-Type":"application/octet-stream","X-Part-Size":String(blob.size)},body:await blob.arrayBuffer()});',
     '      let data={};try{data=await response.json();}catch{}if(!response.ok)throw Error(data.error||("HTTP "+response.status));result=data;break;',
     '     }catch(error){lastError=error;}}',
     '     if(!result)throw lastError||Error("Part upload failed / 分片上传失败");parts.push({partNumber:i+1,etag:result.etag});',
