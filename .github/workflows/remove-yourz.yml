@@ -72,7 +72,22 @@ jobs:
           await task('YOURZ R2 bucket removed',async()=>{
            const path=a+'/r2/buckets/yourz-product-files';
            const bucket=await api(path,'GET',true);
-           if(bucket) await api(path,'DELETE');
+           if(bucket) {
+  let deleted=0;
+  for(let batch=0;batch<100;batch++){
+   const list=await api(path+'/objects?per_page=1000');
+   if(!Array.isArray(list.result)) throw new Error('Unexpected object list response');
+   if(!list.result.length) break;
+   for(const o of list.result){
+    if(typeof o.key!=='string') throw new Error('Object key missing');
+    await api(path+'/objects/'+encodeURIComponent(o.key),'DELETE');
+    deleted++;
+   }
+   if(batch===99) throw new Error('Object deletion bound reached');
+  }
+  console.log('Deleted YOURZ objects: '+deleted);
+  await api(path,'DELETE');
+ }
            if(await api(path,'GET',true)) throw new Error('Bucket still exists');
           });
           await task('YOURZ D1 database removed',async()=>{
