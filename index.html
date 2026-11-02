@@ -626,7 +626,8 @@ var I18N = {
     chDate:"日期", chDue:"跟进日期", chAnchor:"关键点", chQty:"数量", chPrice:"单价", chMoq:"MOQ", chNote:"备注",
     chName:"姓名", chPhone:"电话", chWechat:"微信", chEmail:"邮箱", chTiming:"时机",
     auTitle:"操作日志（审计）", auHint:"最近 50 条操作记录，仅管理模式可见", auEmpty:"暂无操作记录",
-    auAdd:"新增", auEdit:"编辑", auDel:"删除", auRestore:"恢复", auForever:"永久删除", auImport:"导入备份", auCloud:"云端"
+    auAdd:"新增", auEdit:"修改", auDel:"删除", auRestore:"恢复", auForever:"永久删除", auImport:"导入备份", auCloud:"云端",
+    qtQuotes:"报价单", qtUpload:"上传报价单", qtChoose:"选择文件", qtSizeTip:"单个文件最大 50MB", qtSizeLimit:"文件超过 50MB，无法上传", qtUploaded:"上传成功", qtUploadFail:"上传失败", qtCloudNeed:"请先在备份页连接云端存储（Supabase）", qtNoQuotes:"暂无报价单", qtOpen:"打开"
   },
   en: {
     brandName:"Factory Database", brandSub:"Shared Factory Database",
@@ -688,7 +689,8 @@ var I18N = {
     chDate:"Date", chDue:"Follow-up", chAnchor:"Anchor", chQty:"Qty", chPrice:"Price", chMoq:"MOQ", chNote:"Notes",
     chName:"Name", chPhone:"Phone", chWechat:"WeChat", chEmail:"Email", chTiming:"Timing",
     auTitle:"Audit Log", auHint:"Latest 50 actions, admin only", auEmpty:"No records yet",
-    auAdd:"Added", auEdit:"Edited", auDel:"Deleted", auRestore:"Restored", auForever:"Permanently deleted", auImport:"Backup imported", auCloud:"Cloud"
+    auAdd:"Added", auEdit:"Edited", auDel:"Deleted", auRestore:"Restored", auForever:"Permanently deleted", auImport:"Backup imported", auCloud:"Cloud",
+    qtQuotes:"Quotes", qtUpload:"Upload Quote", qtChoose:"Choose File", qtSizeTip:"Max 50MB per file", qtSizeLimit:"File exceeds 50MB", qtUploaded:"Uploaded", qtUploadFail:"Upload failed", qtCloudNeed:"Connect cloud storage first (Backup page)", qtNoQuotes:"No quotes yet", qtOpen:"Open"
   }
 };
 var LANG = localStorage.getItem("fdb_lang") || "zh";
@@ -705,9 +707,9 @@ var DB_KEY = "fdb_data_v1";
 var DEFAULT_DATA = {
   settings: { adminPwd: "YOURZ2026", company: "", address: "", phone: "" },
   suppliers: [
-    { id:"s1", name:"示例供应商A（电子）", contact:"王经理", phone:"13900000001", main:"蓝牙耳机、TWS耳机", rating:"A", note:"合作稳定，打样快", city:"义乌", status:"active", revision:0, advantages:[], stocks:[], chats:[], contacts:[] },
-    { id:"s2", name:"示例供应商B（配件）", contact:"李工", phone:"13900000002", main:"数据线、充电器、充电宝", rating:"B", note:"价格有优势", city:"深圳", status:"active", revision:0, advantages:[], stocks:[], chats:[], contacts:[] },
-    { id:"s3", name:"示例供应商C（礼赠品）", contact:"陈姐", phone:"13900000003", main:"礼品类、小家电", rating:"C", note:"起订量较高", city:"广州", status:"active", revision:0, advantages:[], stocks:[], chats:[], contacts:[] }
+    { id:"s1", name:"示例供应商A（电子）", contact:"王经理", phone:"13900000001", main:"蓝牙耳机、TWS耳机", rating:"A", note:"合作稳定，打样快", city:"义乌", status:"active", revision:0, advantages:[], stocks:[], chats:[], contacts:[], quotes:[] },
+    { id:"s2", name:"示例供应商B（配件）", contact:"李工", phone:"13900000002", main:"数据线、充电器、充电宝", rating:"B", note:"价格有优势", city:"深圳", status:"active", revision:0, advantages:[], stocks:[], chats:[], contacts:[], quotes:[] },
+    { id:"s3", name:"示例供应商C（礼赠品）", contact:"陈姐", phone:"13900000003", main:"礼品类、小家电", rating:"C", note:"起订量较高", city:"广州", status:"active", revision:0, advantages:[], stocks:[], chats:[], contacts:[], quotes:[] }
   ],
   products: [
     { id:"p1", name:"A6S E7S 蓝牙耳机（示例）", category:"蓝牙耳机", supplier:"示例供应商A（电子）", image:"", params:"蓝牙5.3；半入耳式；单次续航5小时，含仓24小时；Type-C充电；触控操作", price:12.8, note:"示例数据" },
@@ -742,6 +744,7 @@ function normalizeDB(d){
     if(!s.stocks) s.stocks = [];
     if(!s.chats) s.chats = [];
     if(!s.contacts) s.contacts = [];
+    if(!s.quotes) s.quotes = [];
     return s;
   });
   if(!Array.isArray(d.audit)) d.audit = [];
@@ -795,7 +798,8 @@ function spCloudRow(s){
     advantages:JSON.stringify(s.advantages||[]),
     stocks:JSON.stringify(s.stocks||[]),
     chats:JSON.stringify(s.chats||[]),
-    contacts:JSON.stringify(s.contacts||[])
+    contacts:JSON.stringify(s.contacts||[]),
+    quotes:JSON.stringify(s.quotes||[])
   };
 }
 function spFromCloudRow(r){
@@ -808,6 +812,7 @@ function spFromCloudRow(r){
   try{ s.stocks=JSON.parse(r.stocks||"[]"); }catch(e){ s.stocks=[]; }
   try{ s.chats=JSON.parse(r.chats||"[]"); }catch(e){ s.chats=[]; }
   try{ s.contacts=JSON.parse(r.contacts||"[]"); }catch(e){ s.contacts=[]; }
+  try{ s.quotes=JSON.parse(r.quotes||"[]"); }catch(e){ s.quotes=[]; }
   return s;
 }
 async function cloudPushAll(){
@@ -832,7 +837,7 @@ function refreshCats(){
   DB.products.forEach(function(p){ if(p.category) m[p.category]=1; });
   CATS = Object.keys(m).sort();
 }
-var CLOUD_SQL = "-- 工厂资料库建表语句（在 Supabase SQL Editor 中执行一次即可）\n-- 若已执行过旧版建表，直接运行下面全部 ALTER 即可升级，无需重建\ncreate table if not exists public.suppliers (\n  id text primary key,\n  name text not null,\n  contact text,\n  phone text,\n  main text,\n  rating text,\n  note text\n);\ncreate table if not exists public.products (\n  id text primary key,\n  name text not null,\n  category text,\n  supplier text,\n  image text,\n  params text,\n  price numeric,\n  note text\n);\nalter table public.suppliers add column if not exists city text;\nalter table public.suppliers add column if not exists status text default 'active';\nalter table public.suppliers add column if not exists revision bigint default 0;\nalter table public.suppliers add column if not exists business text;\nalter table public.suppliers add column if not exists lead text;\nalter table public.suppliers add column if not exists wechat text;\nalter table public.suppliers add column if not exists email text;\nalter table public.suppliers add column if not exists address text;\nalter table public.suppliers add column if not exists workers bigint default 0;\nalter table public.suppliers add column if not exists area text;\nalter table public.suppliers add column if not exists lines bigint default 0;\nalter table public.suppliers add column if not exists capacity text;\nalter table public.suppliers add column if not exists specialty text;\nalter table public.suppliers add column if not exists moq text;\nalter table public.suppliers add column if not exists payment text;\nalter table public.suppliers add column if not exists risks text;\nalter table public.suppliers add column if not exists owner text;\nalter table public.suppliers add column if not exists checked text;\nalter table public.suppliers add column if not exists source text;\nalter table public.suppliers add column if not exists other text;\nalter table public.suppliers add column if not exists advantages text default '[]';\nalter table public.suppliers add column if not exists stocks text default '[]';\nalter table public.suppliers add column if not exists chats text default '[]';\nalter table public.suppliers add column if not exists contacts text default '[]';\nalter table public.suppliers enable row level security;\nalter table public.products enable row level security;\ndrop policy if exists \"anon all suppliers\" on public.suppliers;\ndrop policy if exists \"anon all products\" on public.products;\ncreate policy \"anon all suppliers\" on public.suppliers for all using (true) with check (true);\ncreate policy \"anon all products\" on public.products for all using (true) with check (true);\ngrant all on public.suppliers to anon, authenticated;\ngrant all on public.products to anon, authenticated;";
+var CLOUD_SQL = "-- 工厂资料库建表语句（在 Supabase SQL Editor 中执行一次即可）\n-- 若已执行过旧版建表，直接运行下面全部 ALTER 即可升级，无需重建\ncreate table if not exists public.suppliers (\n  id text primary key,\n  name text not null,\n  contact text,\n  phone text,\n  main text,\n  rating text,\n  note text\n);\ncreate table if not exists public.products (\n  id text primary key,\n  name text not null,\n  category text,\n  supplier text,\n  image text,\n  params text,\n  price numeric,\n  note text\n);\nalter table public.suppliers add column if not exists city text;\nalter table public.suppliers add column if not exists status text default 'active';\nalter table public.suppliers add column if not exists revision bigint default 0;\nalter table public.suppliers add column if not exists business text;\nalter table public.suppliers add column if not exists lead text;\nalter table public.suppliers add column if not exists wechat text;\nalter table public.suppliers add column if not exists email text;\nalter table public.suppliers add column if not exists address text;\nalter table public.suppliers add column if not exists workers bigint default 0;\nalter table public.suppliers add column if not exists area text;\nalter table public.suppliers add column if not exists lines bigint default 0;\nalter table public.suppliers add column if not exists capacity text;\nalter table public.suppliers add column if not exists specialty text;\nalter table public.suppliers add column if not exists moq text;\nalter table public.suppliers add column if not exists payment text;\nalter table public.suppliers add column if not exists risks text;\nalter table public.suppliers add column if not exists owner text;\nalter table public.suppliers add column if not exists checked text;\nalter table public.suppliers add column if not exists source text;\nalter table public.suppliers add column if not exists other text;\nalter table public.suppliers add column if not exists advantages text default '[]';\nalter table public.suppliers add column if not exists stocks text default '[]';\nalter table public.suppliers add column if not exists chats text default '[]';\nalter table public.suppliers add column if not exists contacts text default '[]';\nalter table public.suppliers add column if not exists quotes text default '[]';\nalter table public.suppliers enable row level security;\nalter table public.products enable row level security;\ndrop policy if exists \"anon all suppliers\" on public.suppliers;\ndrop policy if exists \"anon all products\" on public.products;\ncreate policy \"anon all suppliers\" on public.suppliers for all using (true) with check (true);\ncreate policy \"anon all products\" on public.products for all using (true) with check (true);\ngrant all on public.suppliers to anon, authenticated;\ngrant all on public.products to anon, authenticated;";
 function updateCloudUI(ok){
   var tag=$("cloudStatus");
   var hc=$("headerCloud");
@@ -1002,6 +1007,16 @@ function spDetailRowHTML(s){
           (editable?'<button class="btn ghost sm" onclick="openChildModal(\''+s.id+'\',\'contacts\',\''+c.id+'\')">'+esc(T.chEdit)+'</button><button class="btn danger sm" onclick="delChild(\''+s.id+'\',\'contacts\',\''+c.id+'\')">'+esc(T.chDel)+'</button>':'')+
         '</div>';
       }).join('')||'<div style="color:var(--muted);font-size:12px;padding:4px 0">—</div>')+'</div></div>'+
+    '<div class="child-sec"><h4>'+esc(T.qtQuotes)+' ('+((s.quotes||[]).length)+') '+
+      (editable?'<button class="btn ghost sm" onclick="pickQuote(\''+s.id+'\')">'+esc(T.qtUpload)+'</button>':'')+'</h4>'+
+      '<div class="child-items">'+((s.quotes||[]).map(function(q){
+        return '<div class="child-item"><div class="txt">'+
+          '<a href="'+esc(q.url)+'" target="_blank" rel="noopener"><b>'+esc(q.name)+'</b></a>'+
+          (q.size?' <small>'+fmtSize(q.size)+'</small>':'')+(q.at?' · <small>'+esc(q.at)+'</small>':'')+
+          '</div>'+(editable?'<button class="btn danger sm" onclick="delQuote(\''+s.id+'\',\''+q.id+'\')">'+esc(T.chDel)+'</button>':'')+'</div>';
+      }).join('')||'<div style="color:var(--muted);font-size:12px;padding:4px 0">'+esc(T.qtNoQuotes)+'</div>')+'</div>'+
+      (editable?'<input type="file" id="qtFile_'+s.id+'" accept=".pdf,.xls,.xlsx,.csv,.doc,.docx,.jpg,.jpeg,.png" style="display:none" onchange="uploadQuote(\''+s.id+'\',this)"><small style="color:var(--muted)">'+esc(T.qtSizeTip)+'</small>':'')+
+    '</div>'+
   '</div></td></tr>';
 }
 function toggleSpDetail(id){
@@ -1144,6 +1159,46 @@ function delChild(spId, kind, cid){
   if(Array.isArray(s[kind])) s[kind]=s[kind].filter(function(x){return x.id!==cid;});
   s.revision=(Number(s.revision)||0)+1;
   logAudit(T.auDel, s.name+" · "+kind);
+  saveDB(); renderAll(); toast(T.deleted,true);
+}
+function fmtSize(n){
+  n=Number(n)||0;
+  if(n<1024) return n+"B";
+  if(n<1048576) return (n/1024).toFixed(1)+"KB";
+  return (n/1048576).toFixed(1)+"MB";
+}
+function pickQuote(spId){
+  if(!requireAdmin()) return;
+  var inp=document.getElementById("qtFile_"+spId);
+  if(inp) inp.click();
+}
+function uploadQuote(spId, inp){
+  if(!requireAdmin()) return;
+  var f=inp.files[0]; if(!f) return;
+  if(f.size>50*1024*1024){ toast(T.qtSizeLimit,false); inp.value=""; return; }
+  if(!CLOUD){ toast(T.qtCloudNeed,false); inp.value=""; return; }
+  var path="quotes/"+spId+"-"+Date.now()+"-"+f.name.replace(/[\\\/:\s]/g,"_");
+  CLOUD.client.storage.from("quotes").upload(path, f, {upsert:false}).then(function(res){
+    if(res.error){ toast(T.qtUploadFail+": "+res.error.message,false); return; }
+    var url=CLOUD.url+"/storage/v1/object/public/quotes/"+path;
+    var s=DB.suppliers.find(function(x){return x.id===spId;}); if(!s) return;
+    if(!Array.isArray(s.quotes)) s.quotes=[];
+    s.quotes.push({ id:uid(), name:f.name, url:url, size:f.size, at:new Date().toISOString().slice(0,16).replace("T"," ") });
+    s.revision=(Number(s.revision)||0)+1;
+    logAudit(T.auAdd, s.name+" · "+T.qtQuotes+" "+f.name);
+    saveDB(); renderAll(); toast(T.qtUploaded,true);
+  }).catch(function(e){
+    toast(T.qtUploadFail+": "+e.message,false);
+  });
+}
+function delQuote(spId, qid){
+  if(!requireAdmin()) return;
+  if(!confirm(T.confirmDelete)) return;
+  var s=DB.suppliers.find(function(x){return x.id===spId;}); if(!s) return;
+  var q=(s.quotes||[]).find(function(x){return x.id===qid;});
+  s.quotes=(s.quotes||[]).filter(function(x){return x.id!==qid;});
+  s.revision=(Number(s.revision)||0)+1;
+  logAudit(T.auDel, s.name+" · "+T.qtQuotes+" "+((q&&q.name)||""));
   saveDB(); renderAll(); toast(T.deleted,true);
 }
 function renderAudit(){
