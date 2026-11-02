@@ -828,6 +828,16 @@ async function cloudPushAll(){
   if(a.error) throw new Error(a.error.message);
   var b = await CLOUD.client.from("products").upsert(pd, {onConflict:"id"});
   if(b.error) throw new Error(b.error.message);
+  // 清理云端已删除的产品（本地删掉、云端仍留的记录）
+  var localIds = {};
+  DB.products.forEach(function(p){ localIds[p.id]=1; });
+  var r = await CLOUD.client.from("products").select("id");
+  if(r.error) throw new Error(r.error.message);
+  var gone = (r.data||[]).map(function(x){ return x.id; }).filter(function(id){ return !localIds[id]; });
+  if(gone.length){
+    var d = await CLOUD.client.from("products").delete().in("id", gone);
+    if(d.error) throw new Error(d.error.message);
+  }
 }
 async function cloudTestConnection(url, key){
   var cl = window.supabase.createClient(url, key);
