@@ -180,6 +180,28 @@ td .sub{color:var(--muted);font-size:12px}
 .url-row input{flex:1}
 .img-tip{font-size:11px;color:var(--muted);margin-top:6px}
 
+/* wecom merge: supplier detail / child records / recycle / audit */
+.sp-detail-row td{background:var(--surface2);padding:0;border-bottom:1px solid var(--border)}
+.sp-detail{padding:14px 18px}
+.sp-kv{display:grid;grid-template-columns:repeat(3,1fr);gap:8px 16px;margin-bottom:12px}
+.sp-kv>div{font-size:12px;color:var(--muted)}
+.sp-kv b{display:block;color:var(--text);font-weight:600;margin-top:2px;word-break:break-all}
+.child-sec{border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px;background:var(--surface)}
+.child-sec h4{font-size:12px;color:var(--accent);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;letter-spacing:.3px}
+.child-items{display:flex;flex-direction:column;gap:6px}
+.child-item{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--text);background:var(--surface2);border-radius:6px;padding:6px 9px}
+.child-item .txt{flex:1;min-width:0;line-height:1.5}
+.child-item .txt small{color:var(--muted)}
+.child-item .btn{padding:3px 8px;font-size:11px}
+.tag.recycle{background:rgba(248,113,113,.12);color:var(--danger);border-color:rgba(248,113,113,.4)}
+.audit-list{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);max-height:260px;overflow:auto}
+.audit-list .a-item{display:flex;gap:10px;border-bottom:1px dashed rgba(30,42,68,.6);padding:5px 0}
+.audit-list .a-time{color:#5B6B8C;white-space:nowrap;font-variant-numeric:tabular-nums}
+.audit-list .a-act{color:var(--accent);white-space:nowrap}
+details.sp-more{margin-top:2px}
+details.sp-more summary{font-size:12px;color:var(--muted);cursor:pointer;padding:6px 0}
+details.sp-more .more-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:6px}
+
 /* toast */
 #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1C2A46;border:1px solid var(--border);color:var(--text);padding:10px 18px;border-radius:10px;font-size:13px;z-index:200;opacity:0;transition:opacity .25s;pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,.4)}
 #toast.show{opacity:1}
@@ -293,13 +315,15 @@ footer .warn{color:var(--accent2)}
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#5B6B8C" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
         <input id="spSearch" data-i18n-ph="searchSuppliers" placeholder="搜索供应商名称、联系人、主营产品…">
       </div>
+      <button class="btn ghost" id="spShowTrash" data-i18n="spTrash">回收站</button>
+      <button class="btn ghost" id="spBackList" data-i18n="spBack" style="display:none">返回列表</button>
     </div>
     <div class="card">
       <div class="table-wrap">
         <table>
           <thead><tr>
-            <th data-i18n="fName">供应商名称</th><th data-i18n="fContact">联系人</th><th data-i18n="fPhone">联系方式</th>
-            <th data-i18n="fMain">主营产品</th><th data-i18n="fRating">评价</th><th data-i18n="fProdCount">产品数</th><th style="width:130px"></th>
+            <th data-i18n="fName">供应商名称</th><th data-i18n="fCity">城市</th><th data-i18n="fContact">联系人</th><th data-i18n="fPhone">联系方式</th>
+            <th data-i18n="fMain">主营产品</th><th data-i18n="fRating">评价</th><th data-i18n="fProdCount">产品数</th><th style="width:180px"></th>
           </tr></thead>
           <tbody id="spTbody"></tbody>
         </table>
@@ -416,6 +440,11 @@ footer .warn{color:var(--accent2)}
         <li data-i18n="bkHow3">管理模式（右上角按钮）输入密码后可新增/编辑供应商与产品；浏览模式仅查看。</li>
       </ul>
     </div>
+    <div class="card" style="margin-top:16px">
+      <h3><span data-i18n="auTitle">操作日志（审计）</span> <span class="hint" data-i18n="auHint">最近 50 条操作记录，仅管理模式可见</span></h3>
+      <div class="audit-list" id="auditList"></div>
+      <div class="empty-state" id="auditEmpty" style="display:none;padding:24px 0"><div class="big" style="font-size:26px">∅</div><p data-i18n="auEmpty">暂无操作记录</p></div>
+    </div>
   </section>
 </main>
 
@@ -426,23 +455,59 @@ footer .warn{color:var(--accent2)}
 
 <!-- ===== 模态：供应商表单 ===== -->
 <div class="modal-mask" id="modalSp">
-  <div class="modal">
+  <div class="modal" style="max-width:640px">
     <h3 id="spModalTitle">新增供应商</h3>
     <div class="form-grid">
       <div class="full"><label data-i18n="fName">供应商名称</label><input id="spFormName" placeholder="如：义乌XX电子厂"></div>
       <div><label data-i18n="fContact">联系人</label><input id="spFormContact"></div>
       <div><label data-i18n="fPhone">联系方式</label><input id="spFormPhone" placeholder="电话 / 微信"></div>
       <div class="full"><label data-i18n="fMain">主营产品</label><input id="spFormMain" placeholder="如：蓝牙耳机、充电宝"></div>
-      <div class="full"><label data-i18n="fRating">评价</label>
+      <div><label data-i18n="fCity">城市</label><input id="spFormCity" placeholder="如：义乌"></div>
+      <div><label data-i18n="fRating">评价</label>
         <select id="spFormRating">
           <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="" data-i18n="fRatingNone">待评估</option>
         </select>
       </div>
       <div class="full"><label data-i18n="fNote">备注</label><textarea id="spFormNote" rows="2"></textarea></div>
     </div>
+    <details class="sp-more">
+      <summary data-i18n="spMore">更多资料（选填）</summary>
+      <div class="more-grid">
+        <div><label data-i18n="fBusiness">业务类型</label><input id="spFormBusiness"></div>
+        <div><label data-i18n="fLead">负责人</label><input id="spFormLead"></div>
+        <div><label data-i18n="fWechat">微信</label><input id="spFormWechat"></div>
+        <div><label data-i18n="fEmail">邮箱</label><input id="spFormEmail"></div>
+        <div class="full"><label data-i18n="fAddress">地址</label><input id="spFormAddress"></div>
+        <div><label data-i18n="fWorkers">工人数</label><input id="spFormWorkers" type="number" min="0"></div>
+        <div><label data-i18n="fArea">厂房面积</label><input id="spFormArea" placeholder="如：2000㎡"></div>
+        <div><label data-i18n="fLines">产线数量</label><input id="spFormLines" type="number" min="0"></div>
+        <div><label data-i18n="fCapacity">产能</label><input id="spFormCapacity" placeholder="如：月产10万"></div>
+        <div class="full"><label data-i18n="fSpecialty">专长</label><input id="spFormSpecialty"></div>
+        <div><label data-i18n="fMoq">起订量 MOQ</label><input id="spFormMoq"></div>
+        <div><label data-i18n="fPayment">付款方式</label><input id="spFormPayment"></div>
+        <div class="full"><label data-i18n="fRisks">风险提示</label><textarea id="spFormRisks" rows="2"></textarea></div>
+        <div><label data-i18n="fOwner">归属</label><input id="spFormOwner"></div>
+        <div><label data-i18n="fChecked">核实日期</label><input id="spFormChecked" type="date"></div>
+        <div><label data-i18n="fSource">来源</label><input id="spFormSource"></div>
+        <div class="full"><label data-i18n="fOther">其他</label><input id="spFormOther"></div>
+        <div class="full"><label data-i18n="fAdvantages">优势（逗号分隔）</label><input id="spFormAdvantages" placeholder="如：打样快，价格低"></div>
+      </div>
+    </details>
     <div class="form-actions">
       <button class="btn ghost" id="spModalCancel" data-i18n="cancel">取消</button>
       <button class="btn" id="spModalSave" data-i18n="save">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 模态：子记录（库存/沟通/联系人） ===== -->
+<div class="modal-mask" id="modalChild">
+  <div class="modal" style="max-width:520px">
+    <h3 id="chModalTitle">新增记录</h3>
+    <div class="form-grid" id="chFields"></div>
+    <div class="form-actions">
+      <button class="btn ghost" id="chModalCancel" data-i18n="cancel">取消</button>
+      <button class="btn" id="chModalSave" data-i18n="save">保存</button>
     </div>
   </div>
 </div>
@@ -548,7 +613,20 @@ var I18N = {
     cloudTestOk:"连接成功，云端数据可读写", cloudTestFail:"连接失败",
     cloudConnected:"已连接云端，数据已同步", cloudResetOk:"已断开云端，回到本地模式",
     cloudSyncFail:"云端同步失败", cloudLoadFail:"云端数据加载失败，已用本地缓存",
-    supplier:"供应商", category:"分类", price:"价格", updated:"更新"
+    supplier:"供应商", category:"分类", price:"价格", updated:"更新",
+    fCity:"城市", spMore:"更多资料（选填）", fBusiness:"业务类型", fLead:"负责人", fWechat:"微信", fEmail:"邮箱", fAddress:"地址",
+    fWorkers:"工人数", fArea:"厂房面积", fLines:"产线数量", fCapacity:"产能", fSpecialty:"专长", fMoq:"起订量 MOQ", fPayment:"付款方式",
+    fRisks:"风险提示", fOwner:"归属", fChecked:"核实日期", fSource:"来源", fOther:"其他", fAdvantages:"优势（逗号分隔）",
+    spTrash:"回收站", spBack:"返回列表", spInTrash:"已删除", spRestore:"恢复", spDelForever:"永久删除",
+    spDetail:"详情", spCollapse:"收起", spConfirmDel:"确认删除这项供应商？将移入回收站可恢复。",
+    spConfirmForever:"永久删除不可恢复，且需输入供应商名称确认。", spTypeName:"请输入供应商全名以确认：",
+    spRestored:"已恢复", spForeverDeleted:"已永久删除",
+    stStocks:"库存", stChats:"沟通", stContacts:"联系人", chAdd:"新增", chEdit:"编辑", chDel:"删除",
+    chStockTitle:"库存记录", chChatTitle:"沟通记录", chContactTitle:"联系人",
+    chDate:"日期", chDue:"跟进日期", chAnchor:"关键点", chQty:"数量", chPrice:"单价", chMoq:"MOQ", chNote:"备注",
+    chName:"姓名", chPhone:"电话", chWechat:"微信", chEmail:"邮箱", chTiming:"时机",
+    auTitle:"操作日志（审计）", auHint:"最近 50 条操作记录，仅管理模式可见", auEmpty:"暂无操作记录",
+    auAdd:"新增", auEdit:"编辑", auDel:"删除", auRestore:"恢复", auForever:"永久删除", auImport:"导入备份", auCloud:"云端"
   },
   en: {
     brandName:"Factory Database", brandSub:"Shared Factory Database",
@@ -597,7 +675,20 @@ var I18N = {
     cloudTestOk:"Connected, cloud data is readable/writable", cloudTestFail:"Connection failed",
     cloudConnected:"Cloud connected, data synced", cloudResetOk:"Disconnected, back to local mode",
     cloudSyncFail:"Cloud sync failed", cloudLoadFail:"Cloud load failed, using local cache",
-    supplier:"Supplier", category:"Category", price:"Price", updated:"Updated"
+    supplier:"Supplier", category:"Category", price:"Price", updated:"Updated",
+    fCity:"City", spMore:"More (optional)", fBusiness:"Business", fLead:"Lead", fWechat:"WeChat", fEmail:"Email", fAddress:"Address",
+    fWorkers:"Workers", fArea:"Area", fLines:"Lines", fCapacity:"Capacity", fSpecialty:"Specialty", fMoq:"MOQ", fPayment:"Payment",
+    fRisks:"Risks", fOwner:"Owner", fChecked:"Checked", fSource:"Source", fOther:"Other", fAdvantages:"Advantages (comma separated)",
+    spTrash:"Trash", spBack:"Back to list", spInTrash:"Deleted", spRestore:"Restore", spDelForever:"Delete Forever",
+    spDetail:"Details", spCollapse:"Collapse", spConfirmDel:"Delete this supplier? Moves to trash (recoverable).",
+    spConfirmForever:"Permanent delete is irreversible. Type the supplier name to confirm.", spTypeName:"Type the full supplier name to confirm:",
+    spRestored:"Restored", spForeverDeleted:"Permanently deleted",
+    stStocks:"Stock", stChats:"Chats", stContacts:"Contacts", chAdd:"Add", chEdit:"Edit", chDel:"Delete",
+    chStockTitle:"Stock Records", chChatTitle:"Chat Records", chContactTitle:"Contacts",
+    chDate:"Date", chDue:"Follow-up", chAnchor:"Anchor", chQty:"Qty", chPrice:"Price", chMoq:"MOQ", chNote:"Notes",
+    chName:"Name", chPhone:"Phone", chWechat:"WeChat", chEmail:"Email", chTiming:"Timing",
+    auTitle:"Audit Log", auHint:"Latest 50 actions, admin only", auEmpty:"No records yet",
+    auAdd:"Added", auEdit:"Edited", auDel:"Deleted", auRestore:"Restored", auForever:"Permanently deleted", auImport:"Backup imported", auCloud:"Cloud"
   }
 };
 var LANG = localStorage.getItem("fdb_lang") || "zh";
@@ -614,9 +705,9 @@ var DB_KEY = "fdb_data_v1";
 var DEFAULT_DATA = {
   settings: { adminPwd: "YOURZ2026", company: "", address: "", phone: "" },
   suppliers: [
-    { id:"s1", name:"示例供应商A（电子）", contact:"王经理", phone:"13900000001", main:"蓝牙耳机、TWS耳机", rating:"A", note:"合作稳定，打样快" },
-    { id:"s2", name:"示例供应商B（配件）", contact:"李工", phone:"13900000002", main:"数据线、充电器、充电宝", rating:"B", note:"价格有优势" },
-    { id:"s3", name:"示例供应商C（礼赠品）", contact:"陈姐", phone:"13900000003", main:"礼品类、小家电", rating:"C", note:"起订量较高" }
+    { id:"s1", name:"示例供应商A（电子）", contact:"王经理", phone:"13900000001", main:"蓝牙耳机、TWS耳机", rating:"A", note:"合作稳定，打样快", city:"义乌", status:"active", revision:0, advantages:[], stocks:[], chats:[], contacts:[] },
+    { id:"s2", name:"示例供应商B（配件）", contact:"李工", phone:"13900000002", main:"数据线、充电器、充电宝", rating:"B", note:"价格有优势", city:"深圳", status:"active", revision:0, advantages:[], stocks:[], chats:[], contacts:[] },
+    { id:"s3", name:"示例供应商C（礼赠品）", contact:"陈姐", phone:"13900000003", main:"礼品类、小家电", rating:"C", note:"起订量较高", city:"广州", status:"active", revision:0, advantages:[], stocks:[], chats:[], contacts:[] }
   ],
   products: [
     { id:"p1", name:"A6S E7S 蓝牙耳机（示例）", category:"蓝牙耳机", supplier:"示例供应商A（电子）", image:"", params:"蓝牙5.3；半入耳式；单次续航5小时，含仓24小时；Type-C充电；触控操作", price:12.8, note:"示例数据" },
@@ -636,9 +727,30 @@ var CLOUD = null; // {url, key, client}
 function loadDB(){
   try {
     var raw = localStorage.getItem(DB_KEY);
-    if(raw){ var d = JSON.parse(raw); if(d && d.suppliers && d.products) return d; }
+    if(raw){ var d = JSON.parse(raw); if(d && d.suppliers && d.products) return normalizeDB(d); }
   } catch(e){}
   return JSON.parse(JSON.stringify(DEFAULT_DATA));
+}
+/* 兼容旧备份/旧本地数据：补齐供应商新字段与 audit */
+function normalizeDB(d){
+  d = JSON.parse(JSON.stringify(d));
+  if(!d.settings) d.settings = JSON.parse(JSON.stringify(DEFAULT_DATA.settings));
+  d.suppliers = (d.suppliers||[]).map(function(s){
+    if(!s.status) s.status = "active";
+    if(!s.revision) s.revision = 0;
+    if(!s.advantages) s.advantages = [];
+    if(!s.stocks) s.stocks = [];
+    if(!s.chats) s.chats = [];
+    if(!s.contacts) s.contacts = [];
+    return s;
+  });
+  if(!Array.isArray(d.audit)) d.audit = [];
+  return d;
+}
+function logAudit(act, target){
+  DB.audit = DB.audit||[];
+  DB.audit.unshift({ at:new Date().toISOString().slice(0,16).replace("T"," "), act:act, target:target||"" });
+  if(DB.audit.length>200) DB.audit = DB.audit.slice(0,200);
 }
 function saveDB(){
   localStorage.setItem(DB_KEY, JSON.stringify(DB));
@@ -673,11 +785,34 @@ async function cloudPull(){
   if(pd.error) throw new Error(pd.error.message);
   return { suppliers: sp.data||[], products: pd.data||[] };
 }
+function spCloudRow(s){
+  return {
+    id:s.id, name:s.name, contact:s.contact||"", phone:s.phone||"", main:s.main||"", rating:s.rating||"", note:s.note||"",
+    city:s.city||"", status:s.status||"active", revision:Number(s.revision)||0,
+    business:s.business||"", lead:s.lead||"", wechat:s.wechat||"", email:s.email||"", address:s.address||"",
+    workers:Number(s.workers)||0, area:s.area||"", lines:Number(s.lines)||0, capacity:s.capacity||"", specialty:s.specialty||"",
+    moq:s.moq||"", payment:s.payment||"", risks:s.risks||"", owner:s.owner||"", checked:s.checked||"", source:s.source||"", other:s.other||"",
+    advantages:JSON.stringify(s.advantages||[]),
+    stocks:JSON.stringify(s.stocks||[]),
+    chats:JSON.stringify(s.chats||[]),
+    contacts:JSON.stringify(s.contacts||[])
+  };
+}
+function spFromCloudRow(r){
+  var s={ id:r.id, name:r.name, contact:r.contact||"", phone:r.phone||"", main:r.main||"", rating:r.rating||"", note:r.note||"",
+    city:r.city||"", status:r.status||"active", revision:Number(r.revision)||0,
+    business:r.business||"", lead:r.lead||"", wechat:r.wechat||"", email:r.email||"", address:r.address||"",
+    workers:Number(r.workers)||0, area:r.area||"", lines:Number(r.lines)||0, capacity:r.capacity||"", specialty:r.specialty||"",
+    moq:r.moq||"", payment:r.payment||"", risks:r.risks||"", owner:r.owner||"", checked:r.checked||"", source:r.source||"", other:r.other||"" };
+  try{ s.advantages=JSON.parse(r.advantages||"[]"); }catch(e){ s.advantages=[]; }
+  try{ s.stocks=JSON.parse(r.stocks||"[]"); }catch(e){ s.stocks=[]; }
+  try{ s.chats=JSON.parse(r.chats||"[]"); }catch(e){ s.chats=[]; }
+  try{ s.contacts=JSON.parse(r.contacts||"[]"); }catch(e){ s.contacts=[]; }
+  return s;
+}
 async function cloudPushAll(){
   if(!CLOUD) return;
-  var sp = DB.suppliers.map(function(s){
-    return { id:s.id, name:s.name, contact:s.contact||"", phone:s.phone||"", main:s.main||"", rating:s.rating||"", note:s.note||"" };
-  });
+  var sp = DB.suppliers.map(spCloudRow);
   var pd = DB.products.map(function(p){
     return { id:p.id, name:p.name, category:p.category||"", supplier:p.supplier||"", image:p.image||"", params:p.params||"", price:Number(p.price)||0, note:p.note||"" };
   });
@@ -697,7 +832,7 @@ function refreshCats(){
   DB.products.forEach(function(p){ if(p.category) m[p.category]=1; });
   CATS = Object.keys(m).sort();
 }
-var CLOUD_SQL = "-- 工厂资料库建表语句（在 Supabase SQL Editor 中执行一次即可）\ncreate table public.suppliers (\n  id text primary key,\n  name text not null,\n  contact text,\n  phone text,\n  main text,\n  rating text,\n  note text\n);\ncreate table public.products (\n  id text primary key,\n  name text not null,\n  category text,\n  supplier text,\n  image text,\n  params text,\n  price numeric,\n  note text\n);\nalter table public.suppliers enable row level security;\nalter table public.products enable row level security;\ncreate policy \"anon all suppliers\" on public.suppliers for all using (true) with check (true);\ncreate policy \"anon all products\" on public.products for all using (true) with check (true);\ngrant all on public.suppliers to anon, authenticated;\ngrant all on public.products to anon, authenticated;";
+var CLOUD_SQL = "-- 工厂资料库建表语句（在 Supabase SQL Editor 中执行一次即可）\n-- 若已执行过旧版建表，直接运行下面全部 ALTER 即可升级，无需重建\ncreate table if not exists public.suppliers (\n  id text primary key,\n  name text not null,\n  contact text,\n  phone text,\n  main text,\n  rating text,\n  note text\n);\ncreate table if not exists public.products (\n  id text primary key,\n  name text not null,\n  category text,\n  supplier text,\n  image text,\n  params text,\n  price numeric,\n  note text\n);\nalter table public.suppliers add column if not exists city text;\nalter table public.suppliers add column if not exists status text default 'active';\nalter table public.suppliers add column if not exists revision bigint default 0;\nalter table public.suppliers add column if not exists business text;\nalter table public.suppliers add column if not exists lead text;\nalter table public.suppliers add column if not exists wechat text;\nalter table public.suppliers add column if not exists email text;\nalter table public.suppliers add column if not exists address text;\nalter table public.suppliers add column if not exists workers bigint default 0;\nalter table public.suppliers add column if not exists area text;\nalter table public.suppliers add column if not exists lines bigint default 0;\nalter table public.suppliers add column if not exists capacity text;\nalter table public.suppliers add column if not exists specialty text;\nalter table public.suppliers add column if not exists moq text;\nalter table public.suppliers add column if not exists payment text;\nalter table public.suppliers add column if not exists risks text;\nalter table public.suppliers add column if not exists owner text;\nalter table public.suppliers add column if not exists checked text;\nalter table public.suppliers add column if not exists source text;\nalter table public.suppliers add column if not exists other text;\nalter table public.suppliers add column if not exists advantages text default '[]';\nalter table public.suppliers add column if not exists stocks text default '[]';\nalter table public.suppliers add column if not exists chats text default '[]';\nalter table public.suppliers add column if not exists contacts text default '[]';\nalter table public.suppliers enable row level security;\nalter table public.products enable row level security;\ndrop policy if exists \"anon all suppliers\" on public.suppliers;\ndrop policy if exists \"anon all products\" on public.products;\ncreate policy \"anon all suppliers\" on public.suppliers for all using (true) with check (true);\ncreate policy \"anon all products\" on public.products for all using (true) with check (true);\ngrant all on public.suppliers to anon, authenticated;\ngrant all on public.products to anon, authenticated;";
 function updateCloudUI(ok){
   var tag=$("cloudStatus");
   var hc=$("headerCloud");
@@ -773,7 +908,7 @@ function applyI18n(){
 
 /* ---------- 渲染：总览 ---------- */
 function renderOverview(){
-  $("stSuppliers").textContent = DB.suppliers.length;
+  $("stSuppliers").textContent = DB.suppliers.filter(function(s){return s.status!=="deleted";}).length;
   $("stProducts").textContent = DB.products.length;
   $("stCats").textContent = CATS.length;
   var last = localStorage.getItem("fdb_last_backup");
@@ -783,24 +918,95 @@ function renderOverview(){
 }
 
 /* ---------- 渲染：供应商 ---------- */
+var SP_SHOW_TRASH = false;   // 回收站视图开关
+var SP_DETAIL_ID = null;     // 详情展开的供应商 id
+
 function renderSuppliers(){
   var q = ($("spSearch").value||"").trim().toLowerCase();
   var list = DB.suppliers.filter(function(s){
+    if(SP_SHOW_TRASH !== (s.status==="deleted")) return false;
     if(!q) return true;
     return (s.name||"").toLowerCase().indexOf(q)>=0 || (s.contact||"").toLowerCase().indexOf(q)>=0 || (s.main||"").toLowerCase().indexOf(q)>=0;
   });
   $("spEmpty").style.display = list.length?"none":"";
   $("spTbody").innerHTML = list.map(function(s){
     var cnt = DB.products.filter(function(p){ return p.supplier===s.name; }).length;
-    var act = isAdmin()
-      ? '<div class="row-actions"><button class="btn ghost sm" onclick="editSp(\''+s.id+'\')">'+esc(T.edit)+'</button><button class="btn danger sm" onclick="delSp(\''+s.id+'\')">'+esc(T.delete)+'</button></div>'
-      : '<div class="row-actions"><button class="btn ghost sm" onclick="toast(T.needAdmin,false)">'+esc(T.edit)+'</button></div>';
+    var inTrash = s.status==="deleted";
+    var act;
+    if(inTrash){
+      act = isAdmin()
+        ? '<div class="row-actions"><button class="btn ghost sm" onclick="restoreSp(\''+s.id+'\')">'+esc(T.spRestore)+'</button><button class="btn danger sm" onclick="permDelSp(\''+s.id+'\')">'+esc(T.spDelForever)+'</button></div>'
+        : '<div class="row-actions"><button class="btn ghost sm" onclick="toast(T.needAdmin,false)">'+esc(T.spRestore)+'</button></div>';
+    } else {
+      act = '<div class="row-actions">'+
+        '<button class="btn ghost sm" onclick="toggleSpDetail(\''+s.id+'\')">'+(SP_DETAIL_ID===s.id?esc(T.spCollapse):esc(T.spDetail))+'</button>'+
+        (isAdmin()?'<button class="btn ghost sm" onclick="editSp(\''+s.id+'\')">'+esc(T.edit)+'</button><button class="btn danger sm" onclick="delSp(\''+s.id+'\')">'+esc(T.delete)+'</button>'
+                  :'<button class="btn ghost sm" onclick="toast(T.needAdmin,false)">'+esc(T.edit)+'</button>')+
+        '</div>';
+    }
+    var statusCell = inTrash
+      ? '<td><span class="tag recycle">'+esc(T.spInTrash)+'</span></td>'
+      : '<td>'+esc(s.city||"-")+'</td>';
     return '<tr><td><div class="name">'+esc(s.name)+'</div>'+(s.note?'<div class="sub">'+esc(s.note)+'</div>':'')+'</td>'+
+      statusCell+
       '<td>'+esc(s.contact||"-")+'</td><td>'+esc(s.phone||"-")+'</td>'+
       '<td>'+esc(s.main||"-")+'</td>'+
       '<td>'+(s.rating?'<span class="tag">'+esc(s.rating)+'</span>':'<span class="tag amber">'+esc(T.fRatingNone)+'</span>')+'</td>'+
-      '<td>'+cnt+'</td><td>'+act+'</td></tr>';
+      '<td>'+cnt+'</td><td>'+act+'</td></tr>'+
+      (SP_DETAIL_ID===s.id ? spDetailRowHTML(s) : "");
   }).join("");
+}
+function spDetailRowHTML(s){
+  var kv = [
+    [T.fBusiness, s.business], [T.fLead, s.lead], [T.fWechat, s.wechat], [T.fEmail, s.email],
+    [T.fAddress, s.address], [T.fWorkers, s.workers], [T.fArea, s.area], [T.fLines, s.lines],
+    [T.fCapacity, s.capacity], [T.fSpecialty, s.specialty], [T.fMoq, s.moq], [T.fPayment, s.payment],
+    [T.fRisks, s.risks], [T.fOwner, s.owner], [T.fChecked, s.checked], [T.fSource, s.source], [T.fOther, s.other]
+  ].filter(function(k){ return k[1]!==undefined && k[1]!==null && String(k[1]).trim()!==""; });
+  var adv = (s.advantages||[]).map(function(a){ return '<span class="tag">'+esc(a)+'</span>'; }).join("");
+  var kvHtml = kv.map(function(k){
+    return '<div><span>'+esc(k[0])+'</span><b>'+esc(k[1])+'</b></div>';
+  }).join("");
+  var editable = isAdmin() && s.status!=="deleted";
+  var secBtn = function(kind){
+    return editable ? '<button class="btn ghost sm" onclick="openChildModal(\''+s.id+'\',\''+kind+'\',null)">'+esc(T.chAdd)+'</button>' : '';
+  };
+  return '<tr class="sp-detail-row"><td colspan="8"><div class="sp-detail">'+
+    (adv?'<div class="child-sec" style="margin-bottom:10px"><h4>'+esc(T.fAdvantages)+'</h4><div style="display:flex;gap:6px;flex-wrap:wrap">'+adv+'</div></div>':'')+
+    (kv.length?'<div class="sp-kv">'+kvHtml+'</div>':'')+
+    '<div class="child-sec"><h4>'+esc(T.chStockTitle)+' ('+((s.stocks||[]).length)+') '+secBtn("stocks")+'</h4>'+
+      '<div class="child-items">'+((s.stocks||[]).map(function(c){
+        return '<div class="child-item"><div class="txt">'+
+          '<b>'+esc(c.date||"-")+'</b>'+(c.due?' <small>→ '+esc(c.due)+'</small>':'')+(c.anchor?' · <small>'+esc(c.anchor)+'</small>':'')+
+          (c.quantity!==undefined&&c.quantity!==""?' · <small>'+esc(T.chQty)+': '+esc(c.quantity)+'</small>':'')+
+          (c.price!==undefined&&c.price!==""?' · <small>'+esc(T.chPrice)+': ¥'+esc(c.price)+'</small>':'')+
+          (c.moq?' · <small>'+esc(T.chMoq)+': '+esc(c.moq)+'</small>':'')+
+          (c.note?'<br><small>'+esc(c.note)+'</small>':'')+'</div>'+
+          (editable?'<button class="btn ghost sm" onclick="openChildModal(\''+s.id+'\',\'stocks\',\''+c.id+'\')">'+esc(T.chEdit)+'</button><button class="btn danger sm" onclick="delChild(\''+s.id+'\',\'stocks\',\''+c.id+'\')">'+esc(T.chDel)+'</button>':'')+
+        '</div>';
+      }).join('')||'<div style="color:var(--muted);font-size:12px;padding:4px 0">—</div>')+'</div></div>'+
+    '<div class="child-sec"><h4>'+esc(T.chChatTitle)+' ('+((s.chats||[]).length)+') '+secBtn("chats")+'</h4>'+
+      '<div class="child-items">'+((s.chats||[]).map(function(c){
+        return '<div class="child-item"><div class="txt">'+
+          '<b>'+esc(c.date||"-")+'</b>'+(c.timing?' <small>'+esc(c.timing)+'</small>':'')+(c.due?' <small>→ '+esc(c.due)+'</small>':'')+
+          (c.anchor?' · <small>'+esc(c.anchor)+'</small>':'')+
+          (c.note?'<br><small>'+esc(c.note)+'</small>':'')+'</div>'+
+          (editable?'<button class="btn ghost sm" onclick="openChildModal(\''+s.id+'\',\'chats\',\''+c.id+'\')">'+esc(T.chEdit)+'</button><button class="btn danger sm" onclick="delChild(\''+s.id+'\',\'chats\',\''+c.id+'\')">'+esc(T.chDel)+'</button>':'')+
+        '</div>';
+      }).join('')||'<div style="color:var(--muted);font-size:12px;padding:4px 0">—</div>')+'</div></div>'+
+    '<div class="child-sec"><h4>'+esc(T.chContactTitle)+' ('+((s.contacts||[]).length)+') '+secBtn("contacts")+'</h4>'+
+      '<div class="child-items">'+((s.contacts||[]).map(function(c){
+        return '<div class="child-item"><div class="txt">'+
+          '<b>'+esc(c.name||"-")+'</b>'+(c.phone?' · <small>'+esc(c.phone)+'</small>':'')+(c.wechat?' · <small>微信 '+esc(c.wechat)+'</small>':'')+(c.email?' · <small>'+esc(c.email)+'</small>':'')+
+          (c.note?'<br><small>'+esc(c.note)+'</small>':'')+'</div>'+
+          (editable?'<button class="btn ghost sm" onclick="openChildModal(\''+s.id+'\',\'contacts\',\''+c.id+'\')">'+esc(T.chEdit)+'</button><button class="btn danger sm" onclick="delChild(\''+s.id+'\',\'contacts\',\''+c.id+'\')">'+esc(T.chDel)+'</button>':'')+
+        '</div>';
+      }).join('')||'<div style="color:var(--muted);font-size:12px;padding:4px 0">—</div>')+'</div></div>'+
+  '</div></td></tr>';
+}
+function toggleSpDetail(id){
+  SP_DETAIL_ID = SP_DETAIL_ID===id ? null : id;
+  renderSuppliers();
 }
 function renderSpHead(){
   $("spHeadActions").innerHTML = isAdmin()
@@ -811,7 +1017,10 @@ function addSp(){
   if(!requireAdmin()) return;
   EDITING_ID.sp=null;
   $("spModalTitle").textContent=T.addSupplier;
-  ["spFormName","spFormContact","spFormPhone","spFormMain","spFormNote"].forEach(function(i){$(i).value="";});
+  ["spFormName","spFormContact","spFormPhone","spFormMain","spFormNote","spFormCity",
+   "spFormBusiness","spFormLead","spFormWechat","spFormEmail","spFormAddress","spFormWorkers",
+   "spFormArea","spFormLines","spFormCapacity","spFormSpecialty","spFormMoq","spFormPayment",
+   "spFormRisks","spFormOwner","spFormChecked","spFormSource","spFormOther","spFormAdvantages"].forEach(function(i){$(i).value="";});
   $("spFormRating").value="A";
   $("modalSp").classList.add("open");
 }
@@ -823,24 +1032,129 @@ function editSp(id){
   $("spFormName").value=s.name||""; $("spFormContact").value=s.contact||"";
   $("spFormPhone").value=s.phone||""; $("spFormMain").value=s.main||"";
   $("spFormRating").value=s.rating||""; $("spFormNote").value=s.note||"";
+  $("spFormCity").value=s.city||""; $("spFormBusiness").value=s.business||"";
+  $("spFormLead").value=s.lead||""; $("spFormWechat").value=s.wechat||"";
+  $("spFormEmail").value=s.email||""; $("spFormAddress").value=s.address||"";
+  $("spFormWorkers").value=s.workers!=null?s.workers:""; $("spFormArea").value=s.area||"";
+  $("spFormLines").value=s.lines!=null?s.lines:""; $("spFormCapacity").value=s.capacity||"";
+  $("spFormSpecialty").value=s.specialty||""; $("spFormMoq").value=s.moq||"";
+  $("spFormPayment").value=s.payment||""; $("spFormRisks").value=s.risks||"";
+  $("spFormOwner").value=s.owner||""; $("spFormChecked").value=s.checked||"";
+  $("spFormSource").value=s.source||""; $("spFormOther").value=s.other||"";
+  $("spFormAdvantages").value=(s.advantages||[]).join(", ");
   $("modalSp").classList.add("open");
 }
 function delSp(id){
   if(!requireAdmin()) return;
-  if(!confirm(T.confirmDelete)) return;
-  DB.suppliers = DB.suppliers.filter(function(x){return x.id!==id;});
+  if(!confirm(T.spConfirmDel)) return;
+  var s=DB.suppliers.find(function(x){return x.id===id;});
+  if(s){ s.status="deleted"; s.revision=(Number(s.revision)||0)+1; }
+  logAudit(T.auDel, (s&&s.name)||id);
   saveDB(); renderAll(); toast(T.deleted,true);
+}
+function restoreSp(id){
+  if(!requireAdmin()) return;
+  var s=DB.suppliers.find(function(x){return x.id===id;});
+  if(s){ s.status="active"; s.revision=(Number(s.revision)||0)+1; }
+  logAudit(T.auRestore, (s&&s.name)||id);
+  saveDB(); renderAll(); toast(T.spRestored,true);
+}
+function permDelSp(id){
+  if(!requireAdmin()) return;
+  var s=DB.suppliers.find(function(x){return x.id===id;});
+  if(!s) return;
+  var typed=prompt(T.spTypeName);
+  if(typed!==s.name){ toast(T.spConfirmForever,false); return; }
+  var nm=s.name;
+  DB.suppliers=DB.suppliers.filter(function(x){return x.id!==id;});
+  logAudit(T.auForever, nm);
+  saveDB(); renderAll(); toast(T.spForeverDeleted,true);
 }
 function saveSp(){
   var name=$("spFormName").value.trim();
   if(!name){ toast(T.fName+" ✕",false); return; }
+  var obj={
+    name:name, contact:$("spFormContact").value.trim(), phone:$("spFormPhone").value.trim(),
+    main:$("spFormMain").value.trim(), rating:$("spFormRating").value, note:$("spFormNote").value.trim(),
+    city:$("spFormCity").value.trim(), business:$("spFormBusiness").value.trim(), lead:$("spFormLead").value.trim(),
+    wechat:$("spFormWechat").value.trim(), email:$("spFormEmail").value.trim(), address:$("spFormAddress").value.trim(),
+    workers:parseInt($("spFormWorkers").value,10)||0, area:$("spFormArea").value.trim(),
+    lines:parseInt($("spFormLines").value,10)||0, capacity:$("spFormCapacity").value.trim(),
+    specialty:$("spFormSpecialty").value.trim(), moq:$("spFormMoq").value.trim(),
+    payment:$("spFormPayment").value.trim(), risks:$("spFormRisks").value.trim(),
+    owner:$("spFormOwner").value.trim(), checked:$("spFormChecked").value.trim(),
+    source:$("spFormSource").value.trim(), other:$("spFormOther").value.trim(),
+    advantages:$("spFormAdvantages").value.split(/[,，]/).map(function(x){return x.trim();}).filter(Boolean)
+  };
   if(EDITING_ID.sp){
     var s=DB.suppliers.find(function(x){return x.id===EDITING_ID.sp;});
-    if(s){ s.name=name; s.contact=$("spFormContact").value.trim(); s.phone=$("spFormPhone").value.trim(); s.main=$("spFormMain").value.trim(); s.rating=$("spFormRating").value; s.note=$("spFormNote").value.trim(); }
+    if(s){ Object.keys(obj).forEach(function(k){s[k]=obj[k];}); s.revision=(Number(s.revision)||0)+1; }
+    logAudit(T.auEdit, name);
   } else {
-    DB.suppliers.push({ id:uid(), name:name, contact:$("spFormContact").value.trim(), phone:$("spFormPhone").value.trim(), main:$("spFormMain").value.trim(), rating:$("spFormRating").value, note:$("spFormNote").value.trim() });
+    obj.id=uid(); obj.status="active"; obj.revision=1; obj.stocks=[]; obj.chats=[]; obj.contacts=[];
+    DB.suppliers.push(obj);
+    logAudit(T.auAdd, name);
   }
   saveDB(); renderAll(); $("modalSp").classList.remove("open"); toast(EDITING_ID.sp?T.saved:T.added,true);
+}
+
+/* ---------- 子记录（库存/沟通/联系人） ---------- */
+var CHILD_CTX = { sp:null, kind:null, id:null };
+var CHILD_FIELDS = {
+  stocks:[ ["date",T.chDate,"date",""], ["due",T.chDue,"date",""], ["anchor",T.chAnchor,"text",""], ["quantity",T.chQty,"number",""], ["price",T.chPrice,"number",""], ["moq",T.chMoq,"text",""], ["note",T.chNote,"text",""] ],
+  chats:[ ["date",T.chDate,"date",""], ["timing",T.chTiming,"text",""], ["due",T.chDue,"date",""], ["anchor",T.chAnchor,"text",""], ["note",T.chNote,"text",""] ],
+  contacts:[ ["name",T.chName,"text",""], ["phone",T.chPhone,"text",""], ["wechat",T.chWechat,"text",""], ["email",T.chEmail,"text",""], ["note",T.chNote,"text",""] ]
+};
+function openChildModal(spId, kind, cid){
+  if(!requireAdmin()) return;
+  var s=DB.suppliers.find(function(x){return x.id===spId;}); if(!s) return;
+  CHILD_CTX={ sp:spId, kind:kind, id:cid };
+  var defs=CHILD_FIELDS[kind];
+  var existing=null;
+  if(cid){ existing=(s[kind]||[]).find(function(c){return c.id===cid;}); }
+  $("chModalTitle").textContent = (cid?T.chEdit:T.chAdd)+" · "+ (kind==="stocks"?T.chStockTitle:kind==="chats"?T.chChatTitle:T.chContactTitle);
+  $("chFields").innerHTML = defs.map(function(d){
+    var v = existing && existing[d[0]]!=null ? existing[d[0]] : "";
+    return '<div'+(d[0]==="note"?' class="full"':'')+'><label>'+esc(d[1])+'</label><input id="chf_'+d[0]+'" type="'+d[2]+'" value="'+esc(v)+'"></div>';
+  }).join("");
+  $("modalChild").classList.add("open");
+}
+function saveChild(){
+  var s=DB.suppliers.find(function(x){return x.id===CHILD_CTX.sp;}); if(!s) return;
+  var kind=CHILD_CTX.kind;
+  var obj={};
+  CHILD_FIELDS[kind].forEach(function(d){ obj[d[0]]=$("chf_"+d[0]).value.trim(); });
+  if(!Array.isArray(s[kind])) s[kind]=[];
+  if(CHILD_CTX.id){
+    var c=s[kind].find(function(x){return x.id===CHILD_CTX.id;});
+    if(c){ Object.keys(obj).forEach(function(k){c[k]=obj[k];}); }
+    logAudit(T.auEdit, s.name+" · "+kind);
+  } else {
+    obj.id=uid();
+    s[kind].push(obj);
+    logAudit(T.auAdd, s.name+" · "+kind);
+  }
+  s.revision=(Number(s.revision)||0)+1;
+  saveDB(); renderAll(); $("modalChild").classList.remove("open"); toast(T.saved,true);
+}
+function delChild(spId, kind, cid){
+  if(!requireAdmin()) return;
+  if(!confirm(T.confirmDelete)) return;
+  var s=DB.suppliers.find(function(x){return x.id===spId;}); if(!s) return;
+  if(Array.isArray(s[kind])) s[kind]=s[kind].filter(function(x){return x.id!==cid;});
+  s.revision=(Number(s.revision)||0)+1;
+  logAudit(T.auDel, s.name+" · "+kind);
+  saveDB(); renderAll(); toast(T.deleted,true);
+}
+function renderAudit(){
+  var list=DB.audit||[];
+  var el=$("auditList"), empty=$("auditEmpty");
+  if(!el) return;
+  if(!isAdmin()){ el.innerHTML=""; if(empty) empty.style.display=""; return; }
+  if(empty) empty.style.display = list.length?"none":"";
+  el.innerHTML = list.slice(0,50).map(function(a){
+    return '<div class="a-item"><span class="a-time">'+esc(a.at)+'</span><span class="a-act">'+esc(a.act)+'</span><span>'+esc(a.target)+'</span></div>';
+  }).join("");
 }
 
 /* ---------- 渲染：产品 ---------- */
@@ -886,7 +1200,7 @@ function fillPdFormCats(sel, cur){
   sel.innerHTML=html;
 }
 function fillPdFormSuppliers(sel, cur){
-  var html='<option value="">—</option>'+DB.suppliers.map(function(s){return '<option'+(s.name===cur?' selected':'')+'>'+esc(s.name)+'</option>';}).join("");
+  var html='<option value="">—</option>'+DB.suppliers.filter(function(s){return s.status!=="deleted";}).map(function(s){return '<option'+(s.name===cur?' selected':'')+'>'+esc(s.name)+'</option>';}).join("");
   sel.innerHTML=html;
 }
 function addPd(){
@@ -1017,7 +1331,7 @@ function downloadFile(name,content,mime){
   setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },400);
 }
 function exportBackup(){
-  var data=JSON.stringify({ _v:1, _t:Date.now(), settings:DB.settings, suppliers:DB.suppliers, products:DB.products },null,2);
+  var data=JSON.stringify({ _v:2, _t:Date.now(), settings:DB.settings, suppliers:DB.suppliers, products:DB.products, audit:DB.audit||[] },null,2);
   downloadFile("factory-db-backup-"+new Date().toISOString().slice(0,10)+".json",data,"application/json");
   localStorage.setItem("fdb_last_backup",new Date().toLocaleDateString("zh-CN"));
   renderOverview(); toast(T.bkExported,true);
@@ -1028,8 +1342,10 @@ function importBackup(file){
     try{
       var d=JSON.parse(reader.result);
       if(!d||!Array.isArray(d.suppliers)||!Array.isArray(d.products)) throw 0;
+      d=normalizeDB(d);
       if(d.settings) DB.settings=d.settings;
-      DB.suppliers=d.suppliers; DB.products=d.products;
+      DB.suppliers=d.suppliers; DB.products=d.products; DB.audit=d.audit||[];
+      logAudit(T.auImport, file.name);
       saveDB(); refreshCats(); renderAll(); toast(T.bkImported,true);
     }catch(e){ toast(T.bkImportErr,false); }
   };
@@ -1054,7 +1370,7 @@ function switchView(name){
 }
 function renderAll(){
   refreshCats();
-  renderOverview(); renderSpHead(); renderSuppliers(); renderPdHead(); renderCatFilter(); renderProducts(); renderQuoteList();
+  renderOverview(); renderSpHead(); renderSuppliers(); renderPdHead(); renderCatFilter(); renderProducts(); renderQuoteList(); renderAudit();
 }
 
 /* ---------- 事件绑定 ---------- */
@@ -1084,6 +1400,13 @@ function bind(){
   $("spModalCancel").addEventListener("click",function(){ $("modalSp").classList.remove("open"); });
   $("modalSp").addEventListener("click",function(e){ if(e.target===this) this.classList.remove("open"); });
   $("spModalSave").addEventListener("click",saveSp);
+  // 子记录模态
+  $("chModalCancel").addEventListener("click",function(){ $("modalChild").classList.remove("open"); });
+  $("modalChild").addEventListener("click",function(e){ if(e.target===this) this.classList.remove("open"); });
+  $("chModalSave").addEventListener("click",saveChild);
+  // 回收站切换
+  $("spShowTrash").addEventListener("click",function(){ SP_SHOW_TRASH=true; $("spShowTrash").style.display="none"; $("spBackList").style.display=""; renderSuppliers(); });
+  $("spBackList").addEventListener("click",function(){ SP_SHOW_TRASH=false; $("spShowTrash").style.display=""; $("spBackList").style.display="none"; renderSuppliers(); });
 
   // 产品模态
   $("pdModalCancel").addEventListener("click",function(){ $("modalPd").classList.remove("open"); });
@@ -1193,8 +1516,19 @@ document.addEventListener("DOMContentLoaded",function(){
   if(CLOUD){
     cloudPull().then(function(data){
       if(data){
-        DB.suppliers=data.suppliers;
-        DB.products=data.products;
+        var cloudSp = (data.suppliers||[]).map(spFromCloudRow);
+        var localSp = DB.suppliers||[];
+        var merged = [];
+        localSp.forEach(function(l){
+          var c = cloudSp.find(function(x){return x.id===l.id;});
+          if(c && (Number(c.revision)||0) > (Number(l.revision)||0)){ merged.push(c); }
+          else { merged.push(l); }
+        });
+        cloudSp.forEach(function(c){
+          if(!merged.find(function(x){return x.id===c.id;})) merged.push(c);
+        });
+        DB.suppliers = merged;
+        DB.products = data.products||DB.products;
         localStorage.setItem(DB_KEY, JSON.stringify(DB));
         renderAll();
         toast(T.cloudConnected,true);
