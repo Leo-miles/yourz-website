@@ -1180,7 +1180,9 @@ function uploadQuote(spId, inp){
   var f=inp.files[0]; if(!f) return;
   if(f.size>50*1024*1024){ toast(T.qtSizeLimit,false); inp.value=""; return; }
   if(!CLOUD){ toast(T.qtCloudNeed,false); inp.value=""; return; }
-  var path="quotes/"+spId+"-"+Date.now()+"-"+f.name.replace(/[\\\/:\s]/g,"_");
+  var safeName=f.name.replace(/[\\\/:#?%\s]/g,"_");
+  var rawPath="quotes/"+spId+"-"+Date.now()+"-"+safeName;
+  var path=rawPath.split("/").map(function(seg){return encodeURIComponent(seg);}).join("/");
   CLOUD.client.storage.from("quotes").upload(path, f, {upsert:false}).then(function(res){
     if(res.error){ toast(T.qtUploadFail+": "+res.error.message,false); return; }
     var url=CLOUD.url+"/storage/v1/object/public/quotes/"+path;
