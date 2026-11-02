@@ -627,7 +627,8 @@ var I18N = {
     chName:"姓名", chPhone:"电话", chWechat:"微信", chEmail:"邮箱", chTiming:"时机",
     auTitle:"操作日志（审计）", auHint:"最近 50 条操作记录，仅管理模式可见", auEmpty:"暂无操作记录",
     auAdd:"新增", auEdit:"修改", auDel:"删除", auRestore:"恢复", auForever:"永久删除", auImport:"导入备份", auCloud:"云端",
-    qtQuotes:"报价单", qtUpload:"上传报价单", qtChoose:"选择文件", qtSizeTip:"单个文件最大 50MB", qtSizeLimit:"文件超过 50MB，无法上传", qtUploaded:"上传成功", qtUploadFail:"上传失败", qtCloudNeed:"请先在备份页连接云端存储（Supabase）", qtNoQuotes:"暂无报价单", qtOpen:"打开"
+    qtQuotes:"报价单", qtUpload:"上传报价单", qtChoose:"选择文件", qtSizeTip:"单个文件最大 50MB", qtSizeLimit:"文件超过 50MB，无法上传", qtUploaded:"上传成功", qtUploadFail:"上传失败", qtCloudNeed:"请先在备份页连接云端存储（Supabase）", qtNoQuotes:"暂无报价单", qtOpen:"打开",
+    qtAddLink:"添加网盘链接", qtLinkName:"名称", qtLinkUrl:"分享链接（网盘/文件均可，无大小限制）", qtLinkAdded:"链接已添加", qtLinkEmpty:"请填写名称和链接", qtLinkBad:"链接格式不正确", qtOpenLink:"打开链接"
   },
   en: {
     brandName:"Factory Database", brandSub:"Shared Factory Database",
@@ -690,7 +691,8 @@ var I18N = {
     chName:"Name", chPhone:"Phone", chWechat:"WeChat", chEmail:"Email", chTiming:"Timing",
     auTitle:"Audit Log", auHint:"Latest 50 actions, admin only", auEmpty:"No records yet",
     auAdd:"Added", auEdit:"Edited", auDel:"Deleted", auRestore:"Restored", auForever:"Permanently deleted", auImport:"Backup imported", auCloud:"Cloud",
-    qtQuotes:"Quotes", qtUpload:"Upload Quote", qtChoose:"Choose File", qtSizeTip:"Max 50MB per file", qtSizeLimit:"File exceeds 50MB", qtUploaded:"Uploaded", qtUploadFail:"Upload failed", qtCloudNeed:"Connect cloud storage first (Backup page)", qtNoQuotes:"No quotes yet", qtOpen:"Open"
+    qtQuotes:"Quotes", qtUpload:"Upload Quote", qtChoose:"Choose File", qtSizeTip:"Max 50MB per file", qtSizeLimit:"File exceeds 50MB", qtUploaded:"Uploaded", qtUploadFail:"Upload failed", qtCloudNeed:"Connect cloud storage first (Backup page)", qtNoQuotes:"No quotes yet", qtOpen:"Open",
+    qtAddLink:"Add Cloud Link", qtLinkName:"Name", qtLinkUrl:"Share link (cloud drive, no size limit)", qtLinkAdded:"Link added", qtLinkEmpty:"Enter name and link", qtLinkBad:"Invalid link", qtOpenLink:"Open Link"
   }
 };
 var LANG = localStorage.getItem("fdb_lang") || "zh";
@@ -724,6 +726,7 @@ var DB = loadDB();
 
 /* ---------- 云端（Supabase）数据层 ---------- */
 var CLOUD_KEY = "fdb_cloud_v1";
+var DEFAULT_CLOUD = { url:"https://cntbdorokcclacfgmfbk.supabase.co", key:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNudGJkb3Jva2NjbGFjZmdtZmJrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM1ODIyMDcsImV4cCI6MjEwOTE1ODIwN30.LPGMVcoN11RiSVBYD2xiTNeWaS7XnzMCtHiub1x72Us" };
 var CLOUD = null; // {url, key, client}
 
 function loadDB(){
@@ -775,7 +778,7 @@ function saveCloudConfig(c){
   else localStorage.removeItem(CLOUD_KEY);
 }
 function initCloud(){
-  var c = loadCloudConfig();
+  var c = loadCloudConfig() || DEFAULT_CLOUD;
   if(!c || !window.supabase) return false;
   CLOUD = { url:c.url, key:c.key, client: window.supabase.createClient(c.url, c.key) };
   return true;
@@ -853,7 +856,7 @@ function updateCloudUI(ok){
     tag.className = "tag amber";
     if(hc){ hc.textContent=T.cloudStatusOff; hc.className="tag amber"; hc.style.display=""; }
   }
-  var c = loadCloudConfig();
+  var c = loadCloudConfig() || DEFAULT_CLOUD;
   if(c){
     $("cloudUrl").value = c.url;
     $("cloudKey").value = c.key;
@@ -1008,14 +1011,14 @@ function spDetailRowHTML(s){
         '</div>';
       }).join('')||'<div style="color:var(--muted);font-size:12px;padding:4px 0">—</div>')+'</div></div>'+
     '<div class="child-sec"><h4>'+esc(T.qtQuotes)+' ('+((s.quotes||[]).length)+') '+
-      (editable?'<button class="btn ghost sm" onclick="pickQuote(\''+s.id+'\')">'+esc(T.qtUpload)+'</button>':'')+'</h4>'+
+      (editable?'<button class="btn ghost sm" onclick="pickQuote(\''+s.id+'\')">'+esc(T.qtUpload)+'</button><button class="btn ghost sm" onclick="toggleQuoteLink(\''+s.id+'\')">'+esc(T.qtAddLink)+'</button>':'')+'</h4>'+
       '<div class="child-items">'+((s.quotes||[]).map(function(q){
         return '<div class="child-item"><div class="txt">'+
-          '<a href="'+esc(q.url)+'" target="_blank" rel="noopener"><b>'+esc(q.name)+'</b></a>'+
+          '<a href="'+esc(q.url)+'" target="_blank" rel="noopener"><b>'+esc(q.name)+'</b>'+(q.link?' <small style="color:var(--accent)">'+esc(T.qtOpenLink)+'</small>':'')+'</a>'+
           (q.size?' <small>'+fmtSize(q.size)+'</small>':'')+(q.at?' · <small>'+esc(q.at)+'</small>':'')+
           '</div>'+(editable?'<button class="btn danger sm" onclick="delQuote(\''+s.id+'\',\''+q.id+'\')">'+esc(T.chDel)+'</button>':'')+'</div>';
       }).join('')||'<div style="color:var(--muted);font-size:12px;padding:4px 0">'+esc(T.qtNoQuotes)+'</div>')+'</div>'+
-      (editable?'<input type="file" id="qtFile_'+s.id+'" accept=".pdf,.xls,.xlsx,.csv,.doc,.docx,.jpg,.jpeg,.png" style="display:none" onchange="uploadQuote(\''+s.id+'\',this)"><small style="color:var(--muted)">'+esc(T.qtSizeTip)+'</small>':'')+
+      (editable?'<input type="file" id="qtFile_'+s.id+'" accept=".pdf,.xls,.xlsx,.csv,.doc,.docx,.jpg,.jpeg,.png" style="display:none" onchange="uploadQuote(\''+s.id+'\',this)"><div id="qtLinkRow_'+s.id+'" style="display:none;margin-top:6px;border:1px solid var(--border);border-radius:8px;padding:8px;background:rgba(255,255,255,.03)"><input id="qtLinkName_'+s.id+'" placeholder="'+esc(T.qtLinkName)+'" style="width:100%;margin-bottom:6px"><input id="qtLinkUrl_'+s.id+'" placeholder="'+esc(T.qtLinkUrl)+'" style="width:100%;margin-bottom:6px"><button class="btn sm" onclick="addQuoteLink(\''+s.id+'\')">'+esc(T.qtAddLink)+'</button></div><small style="color:var(--muted)">'+esc(T.qtSizeTip)+'</small>':'')+
     '</div>'+
   '</div></td></tr>';
 }
@@ -1200,6 +1203,26 @@ function delQuote(spId, qid){
   s.revision=(Number(s.revision)||0)+1;
   logAudit(T.auDel, s.name+" · "+T.qtQuotes+" "+((q&&q.name)||""));
   saveDB(); renderAll(); toast(T.deleted,true);
+}
+function toggleQuoteLink(spId){
+  if(!requireAdmin()) return;
+  var row=document.getElementById("qtLinkRow_"+spId);
+  if(row) row.style.display = row.style.display==="none" ? "" : "none";
+}
+function addQuoteLink(spId){
+  if(!requireAdmin()) return;
+  var nm=document.getElementById("qtLinkName_"+spId);
+  var ur=document.getElementById("qtLinkUrl_"+spId);
+  if(!nm||!ur) return;
+  var name=nm.value.trim(), url=ur.value.trim();
+  if(!name||!url){ toast(T.qtLinkEmpty,false); return; }
+  if(!/^https?:\/\//i.test(url)){ toast(T.qtLinkBad,false); return; }
+  var s=DB.suppliers.find(function(x){return x.id===spId;}); if(!s) return;
+  if(!Array.isArray(s.quotes)) s.quotes=[];
+  s.quotes.push({ id:uid(), name:name, url:url, link:true, at:new Date().toISOString().slice(0,16).replace("T"," ") });
+  s.revision=(Number(s.revision)||0)+1;
+  logAudit(T.auAdd, s.name+" · "+T.qtQuotes+" "+name);
+  saveDB(); renderAll(); toast(T.qtLinkAdded,true);
 }
 function renderAudit(){
   var list=DB.audit||[];
