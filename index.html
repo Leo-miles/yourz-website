@@ -1,0 +1,1164 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Factory Database / 工厂资料库</title>
+<script src="https://fastly.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230A0F1E'/%3E%3Cpath d='M14 20h36v6H14zm0 12h22v6H14zm0 12h30v6H14z' fill='%2338BDF8'/%3E%3Ccircle cx='46' cy='50' r='5' fill='%23F59E0B'/%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#0A0F1E; --surface:#111A2E; --surface2:#0E1526; --border:#1E2A44;
+  --text:#E6EDF7; --muted:#8CA3C7; --accent:#38BDF8; --accent2:#F59E0B;
+  --danger:#F87171; --success:#34D399; --radius:12px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--bg);color:var(--text);font-family:"Segoe UI","Microsoft YaHei",system-ui,-apple-system,sans-serif;font-size:14px;line-height:1.5;min-height:100vh}
+button{font-family:inherit;cursor:pointer}
+input,select,textarea{font-family:inherit;font-size:16px;color:var(--text);background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;width:100%;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+::placeholder{color:#5B6B8C}
+h1,h2,h3{font-weight:700}
+
+/* header */
+header{position:sticky;top:0;z-index:50;background:rgba(10,15,30,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--border)}
+.header-inner{max-width:1280px;margin:0 auto;padding:10px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:16px;letter-spacing:.5px}
+.brand .logo{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#123, #0A0F1E);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--accent);font-weight:800;font-size:13px}
+.brand small{display:block;font-size:10px;color:var(--muted);font-weight:400;letter-spacing:1px;text-transform:uppercase}
+nav{display:flex;gap:4px;flex:1;flex-wrap:wrap}
+nav button{background:none;border:1px solid transparent;color:var(--muted);padding:8px 14px;border-radius:8px;font-size:14px}
+nav button:hover{color:var(--text);background:var(--surface2)}
+nav button.active{color:var(--accent);background:rgba(56,189,248,.08);border-color:rgba(56,189,248,.25)}
+.header-actions{display:flex;gap:8px;align-items:center}
+.lang-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 12px;border-radius:8px;font-size:13px}
+.lang-btn:hover{border-color:var(--accent)}
+.edit-toggle{background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.3);color:var(--accent);padding:7px 14px;border-radius:8px;font-size:13px;font-weight:600}
+.edit-toggle.on{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.4);color:var(--accent2)}
+.edit-toggle .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:currentColor;margin-right:6px;vertical-align:1px}
+.edit-badge{font-size:11px;color:var(--accent2);padding:2px 8px;border:1px solid rgba(245,158,11,.4);border-radius:20px;font-weight:600}
+
+/* layout */
+main{max-width:1280px;margin:0 auto;padding:24px 20px 60px}
+.view{display:none}
+.view.active{display:block}
+.page-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:20px;flex-wrap:wrap}
+.page-head h1{font-size:22px}
+.page-head .sub{color:var(--muted);font-size:13px;margin-top:4px}
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:18px}
+.toolbar .search-box{flex:1;min-width:220px;position:relative}
+.toolbar .search-box svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);opacity:.6}
+.toolbar .search-box input{padding-left:34px}
+.btn{background:var(--accent);color:#06121F;border:none;padding:9px 16px;border-radius:8px;font-weight:700;font-size:13px}
+.btn:hover{filter:brightness(1.1)}
+.btn.ghost{background:var(--surface2);color:var(--text);border:1px solid var(--border);font-weight:600}
+.btn.ghost:hover{border-color:var(--accent);color:var(--accent)}
+.btn.warn{background:var(--accent2);color:#1A1205}
+.btn.danger{background:rgba(248,113,113,.12);color:var(--danger);border:1px solid rgba(248,113,113,.35)}
+.btn.sm{padding:5px 10px;font-size:12px;border-radius:6px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+
+/* stat cards */
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
+.stat .num{font-size:26px;font-weight:800;color:var(--accent);font-variant-numeric:tabular-nums}
+.stat .lbl{color:var(--muted);font-size:12px;margin-top:2px}
+.stat .num.amber{color:var(--accent2)}
+
+/* section card */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:16px}
+.card h3{font-size:15px;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.card h3 .hint{font-size:11px;color:var(--muted);font-weight:400}
+
+/* table */
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:640px}
+th{font-size:11px;color:var(--muted);text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);white-space:nowrap;letter-spacing:.3px}
+td{padding:10px;border-bottom:1px solid rgba(30,42,68,.6);vertical-align:middle;font-size:13px}
+tr:hover td{background:rgba(56,189,248,.03)}
+td .name{font-weight:600}
+td .sub{color:var(--muted);font-size:12px}
+.tag{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;background:rgba(56,189,248,.1);color:var(--accent);border:1px solid rgba(56,189,248,.25);white-space:nowrap}
+.tag.amber{background:rgba(245,158,11,.1);color:var(--accent2);border-color:rgba(245,158,11,.3)}
+.price{font-weight:700;color:var(--accent2);font-variant-numeric:tabular-nums;white-space:nowrap}
+.row-actions{display:flex;gap:6px;justify-content:flex-end}
+
+/* product grid */
+.prod-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.prod{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;display:flex;flex-direction:column;transition:border-color .15s}
+.prod:hover{border-color:rgba(56,189,248,.45)}
+.prod .img{aspect-ratio:4/3;background:var(--surface2);display:flex;align-items:center;justify-content:center;overflow:hidden}
+.prod .img img{width:100%;height:100%;object-fit:cover;display:block}
+.prod .img svg{width:56px;height:56px;opacity:.5}
+.prod .body{padding:12px 14px;display:flex;flex-direction:column;gap:6px;flex:1}
+.prod .body .pname{font-weight:700;font-size:14px;line-height:1.35}
+.prod .meta{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.prod .params{color:var(--muted);font-size:12px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.prod .foot{display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:8px;border-top:1px solid rgba(30,42,68,.5)}
+.prod .foot .price{font-size:15px}
+.prod .opts{display:flex;gap:6px}
+.prod .opts .btn{opacity:0;transition:opacity .15s}
+.prod:hover .opts .btn{opacity:1}
+.check-badge{width:20px;height:20px;border-radius:6px;border:2px solid var(--border);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:all .15s;font-size:12px;color:#06121F;background:transparent}
+.check-badge.on{background:var(--accent);border-color:var(--accent)}
+
+/* quote */
+.quote-layout{display:grid;grid-template-columns:1.1fr 1fr;gap:18px;align-items:start}
+.quote-paper{background:#fff;color:#1B2733;border-radius:8px;padding:28px 30px;font-family:"Segoe UI","Microsoft YaHei",sans-serif}
+.quote-paper h2{font-size:20px;color:#111}
+.quote-paper .q-head{border-bottom:2px solid #1B2733;padding-bottom:12px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.quote-paper .q-company{font-size:16px;font-weight:800}
+.quote-paper .q-contact{font-size:11px;color:#555;margin-top:4px;line-height:1.6}
+.quote-paper .q-no{text-align:right;font-size:12px;color:#555}
+.quote-paper table{width:100%;border-collapse:collapse;min-width:0;margin-bottom:12px}
+.quote-paper th{font-size:11px;color:#555;background:#F2F5F9;padding:7px 8px;border:1px solid #DDE3EC}
+.quote-paper td{font-size:12px;color:#222;padding:7px 8px;border:1px solid #E3E8F0}
+.quote-paper .t-right{text-align:right}
+.quote-paper .q-total{margin-left:auto;width:max-content;font-size:13px}
+.quote-paper .q-total div{display:flex;gap:24px;justify-content:space-between;padding:3px 0}
+.quote-paper .q-total .final{font-size:16px;font-weight:800;border-top:1px solid #999;margin-top:4px;padding-top:8px}
+.quote-paper .q-note{font-size:10px;color:#888;margin-top:14px;border-top:1px dashed #CCC;padding-top:10px;line-height:1.7}
+.quote-paper .empty{color:#888;text-align:center;padding:60px 0;font-size:13px}
+.quote-toolbar{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.quote-prod-list{display:flex;flex-direction:column;gap:10px;max-height:480px;overflow:auto;padding-right:4px}
+.quote-prod{display:flex;gap:10px;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px;cursor:pointer;transition:border-color .15s}
+.quote-prod:hover{border-color:rgba(56,189,248,.4)}
+.quote-prod.on{border-color:rgba(245,158,11,.5);background:rgba(245,158,11,.05)}
+.quote-prod img{width:46px;height:46px;border-radius:8px;object-fit:cover;background:var(--surface2)}
+.quote-prod .info{flex:1;min-width:0}
+.quote-prod .info .pn{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.quote-prod .info .ps{color:var(--muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.quote-prod .pr{font-weight:700;color:var(--accent2);font-size:13px;white-space:nowrap}
+
+/* backup */
+.backup-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.backup-item{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:10px}
+.backup-item .bi-title{font-weight:700;font-size:14px;display:flex;align-items:center;gap:8px}
+.backup-item .bi-desc{color:var(--muted);font-size:12px;flex:1}
+.backup-item .bi-desc.warn{color:var(--accent2)}
+.backup-item .btn{text-align:center}
+
+/* modal */
+.modal-mask{position:fixed;inset:0;background:rgba(4,8,16,.72);backdrop-filter:blur(4px);display:none;align-items:flex-start;justify-content:center;z-index:100;padding:40px 16px;overflow:auto}
+.modal-mask.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:14px;width:100%;max-width:560px;padding:22px}
+.modal h3{font-size:16px;margin-bottom:16px}
+.modal .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.modal .form-grid .full{grid-column:1/-1}
+.modal .form-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
+.img-preview{width:100%;aspect-ratio:4/3;background:var(--surface2);border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:10px}
+.img-preview img{width:100%;height:100%;object-fit:cover;display:block}
+.img-preview .ph{color:#5B6B8C;font-size:12px}
+.img-tools{display:flex;gap:8px;flex-wrap:wrap}
+.img-tools input[type=file]{display:none}
+.img-tools .btn{padding:7px 12px;font-size:12px}
+.url-row{display:flex;gap:8px}
+.url-row input{flex:1}
+.img-tip{font-size:11px;color:var(--muted);margin-top:6px}
+
+/* toast */
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1C2A46;border:1px solid var(--border);color:var(--text);padding:10px 18px;border-radius:10px;font-size:13px;z-index:200;opacity:0;transition:opacity .25s;pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,.4)}
+#toast.show{opacity:1}
+#toast.ok{border-color:rgba(52,211,153,.5)}
+#toast.err{border-color:rgba(248,113,113,.5)}
+
+.empty-state{text-align:center;color:var(--muted);padding:60px 16px}
+.empty-state .big{font-size:40px;margin-bottom:10px;opacity:.4}
+.empty-state p{font-size:13px}
+
+/* footer */
+footer{border-top:1px solid var(--border);color:var(--muted);font-size:12px;padding:16px 20px;text-align:center}
+footer .warn{color:var(--accent2)}
+
+/* print */
+@media print{
+  header,nav,.toolbar,.quote-toolbar,.header-actions,footer,.edit-toggle,#toast{display:none!important}
+  body{background:#fff}
+  main{padding:0}
+  .quote-layout{display:block}
+  .quote-prod-list,.quote-toolbar{display:none}
+  .quote-paper{box-shadow:none;border:1px solid #999;max-width:210mm;margin:0 auto}
+  .view{display:none!important}
+  .view.active{display:block!important}
+}
+
+@media (max-width:960px){
+  .stat-grid{grid-template-columns:repeat(2,1fr)}
+  .prod-grid{grid-template-columns:repeat(2,1fr)}
+  .quote-layout{grid-template-columns:1fr}
+  .backup-grid{grid-template-columns:1fr}
+  .modal .form-grid{grid-template-columns:1fr}
+}
+@media (max-width:520px){
+  .stat-grid{grid-template-columns:1fr 1fr;gap:10px}
+  .prod-grid{grid-template-columns:1fr}
+  .header-inner{padding:10px 14px}
+  main{padding:18px 14px 50px}
+  .page-head h1{font-size:19px}
+  nav button{padding:7px 10px;font-size:13px}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="header-inner">
+    <div class="brand">
+      <div class="logo">Y</div>
+      <div><span data-i18n="brandName">Factory Database</span><small data-i18n="brandSub">工厂资料库 · 团队共享</small></div>
+    </div>
+    <nav id="nav">
+      <button data-view="overview" class="active" data-i18n="navOverview">总览</button>
+      <button data-view="suppliers" data-i18n="navSuppliers">供应商</button>
+      <button data-view="products" data-i18n="navProducts">产品资料</button>
+      <button data-view="quote" data-i18n="navQuote">报价单</button>
+      <button data-view="backup" data-i18n="navBackup">备份</button>
+    </nav>
+    <div class="header-actions">
+      <span id="headerCloud" class="tag amber" style="display:none;font-size:11px">本地</span>
+      <button class="lang-btn" id="langBtn" title="切换语言">中 / EN</button>
+      <button class="edit-toggle" id="editToggle"><span class="dot"></span><span data-i18n="editMode">管理模式</span></button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <!-- ===== 视图：总览 ===== -->
+  <section class="view active" id="view-overview">
+    <div class="page-head">
+      <div>
+        <h1 data-i18n="ovTitle">资料库总览</h1>
+        <div class="sub" data-i18n="ovSub">团队共享的工厂与产品资料库，请定期导出备份。</div>
+      </div>
+    </div>
+    <div class="stat-grid">
+      <div class="stat"><div class="num" id="stSuppliers">0</div><div class="lbl" data-i18n="stSuppliers">供应商数量</div></div>
+      <div class="stat"><div class="num" id="stProducts">0</div><div class="lbl" data-i18n="stProducts">产品数量</div></div>
+      <div class="stat"><div class="num" id="stCats">0</div><div class="lbl" data-i18n="stCats">产品分类</div></div>
+      <div class="stat"><div class="num amber" id="stBackup">--</div><div class="lbl" data-i18n="stBackup">上次备份</div></div>
+    </div>
+    <div class="card">
+      <h3 data-i18n="ovRecent">最近添加的产品</h3>
+      <div class="prod-grid" id="recentGrid"></div>
+    </div>
+  </section>
+
+  <!-- ===== 视图：供应商 ===== -->
+  <section class="view" id="view-suppliers">
+    <div class="page-head">
+      <div>
+        <h1 data-i18n="spTitle">供应商库</h1>
+        <div class="sub" data-i18n="spSub">管理合作的工厂与供应商，包括联系方式、主营产品与评价。</div>
+      </div>
+      <div id="spHeadActions"></div>
+    </div>
+    <div class="toolbar">
+      <div class="search-box">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#5B6B8C" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input id="spSearch" data-i18n-ph="searchSuppliers" placeholder="搜索供应商名称、联系人、主营产品…">
+      </div>
+    </div>
+    <div class="card">
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th data-i18n="fName">供应商名称</th><th data-i18n="fContact">联系人</th><th data-i18n="fPhone">联系方式</th>
+            <th data-i18n="fMain">主营产品</th><th data-i18n="fRating">评价</th><th data-i18n="fProdCount">产品数</th><th style="width:130px"></th>
+          </tr></thead>
+          <tbody id="spTbody"></tbody>
+        </table>
+      </div>
+      <div class="empty-state" id="spEmpty" style="display:none"><div class="big">∅</div><p data-i18n="noData">暂无数据</p></div>
+    </div>
+  </section>
+
+  <!-- ===== 视图：产品 ===== -->
+  <section class="view" id="view-products">
+    <div class="page-head">
+      <div>
+        <h1 data-i18n="pdTitle">产品资料</h1>
+        <div class="sub" data-i18n="pdSub">每款产品的图片、参数与价格，可搜索、按分类筛选。</div>
+      </div>
+      <div id="pdHeadActions"></div>
+    </div>
+    <div class="toolbar">
+      <div class="search-box">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#5B6B8C" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input id="pdSearch" data-i18n-ph="searchProducts" placeholder="搜索产品名称、参数、供应商…">
+      </div>
+      <select id="pdCatFilter" style="width:auto;min-width:130px"><option value="" data-i18n="allCats">全部分类</option></select>
+      <button class="btn ghost" id="pdClearFilter" data-i18n="clearFilter" style="display:none">清除筛选</button>
+    </div>
+    <div class="prod-grid" id="prodGrid"></div>
+    <div class="empty-state" id="pdEmpty" style="display:none"><div class="big">∅</div><p data-i18n="noData">暂无数据</p></div>
+  </section>
+
+  <!-- ===== 视图：报价单 ===== -->
+  <section class="view" id="view-quote">
+    <div class="page-head">
+      <div>
+        <h1 data-i18n="qtTitle">生成报价单</h1>
+        <div class="sub" data-i18n="qtSub">勾选产品，生成报价单并打印/导出。价格统一人民币报价。</div>
+      </div>
+    </div>
+    <div class="quote-layout">
+      <div>
+        <div class="quote-toolbar">
+          <button class="btn ghost" id="qtSearchToggle" data-i18n="qtFilter">筛选产品</button>
+          <button class="btn ghost" id="qtClear" data-i18n="qtClear">清空已选</button>
+          <span class="tag amber" id="qtCount" style="margin-left:auto">已选 0 项</span>
+        </div>
+        <div id="qtFilterBox" style="display:none;margin-bottom:12px">
+          <div class="toolbar">
+            <div class="search-box" style="min-width:180px">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#5B6B8C" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+              <input id="qtSearch" placeholder="搜索产品…">
+            </div>
+            <select id="qtCat" style="width:auto;min-width:120px"><option value="" data-i18n="allCats">全部分类</option></select>
+          </div>
+        </div>
+        <div class="quote-prod-list" id="qtList"></div>
+        <div class="empty-state" id="qtEmpty" style="display:none"><div class="big">∅</div><p data-i18n="noProducts">暂无产品</p></div>
+      </div>
+      <div>
+        <div class="quote-toolbar">
+          <button class="btn" id="qtPrint" data-i18n="qtPrint">打印 / 保存 PDF</button>
+          <button class="btn ghost" id="qtExport" data-i18n="qtExport">导出 CSV</button>
+        </div>
+        <div class="quote-paper" id="quotePaper">
+          <div class="empty" id="quoteEmpty" data-i18n="quoteEmpty">左侧勾选产品后，报价单会显示在这里</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 视图：备份 ===== -->
+  <section class="view" id="view-backup">
+    <div class="page-head">
+      <div>
+        <h1 data-i18n="bkTitle">数据备份</h1>
+        <div class="sub" data-i18n="bkSub">资料保存在本地浏览器。请定期导出备份，换设备时导入恢复。</div>
+      </div>
+    </div>
+    <div class="backup-grid">
+      <div class="backup-item">
+        <div class="bi-title" data-i18n="bkExportTitle">导出全部备份</div>
+        <div class="bi-desc" data-i18n="bkExportDesc">下载一个 JSON 备份文件，包含所有供应商与产品数据。建议每周导出一次。</div>
+        <button class="btn" id="bkExport" data-i18n="bkExport">导出备份文件</button>
+      </div>
+      <div class="backup-item">
+        <div class="bi-title" data-i18n="bkImportTitle">导入备份</div>
+        <div class="bi-desc" data-i18n="bkImportDesc">选择之前导出的 JSON 文件，恢复数据到本浏览器（将覆盖当前数据）。</div>
+        <button class="btn ghost" id="bkImportBtn" data-i18n="bkImport">选择文件导入</button>
+        <input type="file" id="bkImportFile" accept=".json,application/json" style="display:none">
+      </div>
+      <div class="backup-item">
+        <div class="bi-title" data-i18n="bkExcelTitle">导出 Excel(CSV)</div>
+        <div class="bi-desc" data-i18n="bkExcelDesc">把产品资料导出为 CSV 表格，可用 Excel 打开，方便整理与分享。</div>
+        <button class="btn ghost" id="bkCsv" data-i18n="bkExcel">导出产品 CSV</button>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px;border-color:rgba(56,189,248,.35)">
+      <h3><span style="color:var(--accent)">⬡</span> <span data-i18n="cloudTitle">云端共享（Supabase）</span> <span id="cloudStatus" class="tag" style="margin-left:8px">本地模式</span></h3>
+      <div class="bi-desc" id="cloudDesc" data-i18n="cloudDesc" style="color:var(--muted);font-size:13px;margin-bottom:12px">配置后，数据将保存到云端数据库，任何电脑（含国外）打开本网站都能看到同一份数据。</div>
+      <div class="form-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:720px">
+        <div><label data-i18n="cloudUrl">Supabase 项目 URL</label><input id="cloudUrl" placeholder="https://xxxx.supabase.co"></div>
+        <div><label data-i18n="cloudKey">anon public key</label><input id="cloudKey" placeholder="eyJhbGciOi…"></div>
+      </div>
+      <div class="form-actions" style="display:flex;gap:8px;margin-top:14px">
+        <button class="btn" id="cloudSave" data-i18n="cloudConnect">保存并连接云端</button>
+        <button class="btn ghost" id="cloudTest" data-i18n="cloudTest">测试连接</button>
+        <button class="btn ghost" id="cloudReset" data-i18n="cloudReset">断开云端（回到本地）</button>
+      </div>
+      <div style="margin-top:14px;font-size:12px;color:var(--muted);line-height:1.8" id="cloudHelp"></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3><span data-i18n="bkHowTitle">备份与共享说明</span></h3>
+      <ul style="color:var(--muted);font-size:13px;line-height:1.9;padding-left:18px" id="bkHowList">
+        <li data-i18n="bkHow1">本网站数据保存在当前浏览器的本地存储中，不同电脑之间不会自动同步。</li>
+        <li data-i18n="bkHow2">团队共享方式：在 A 电脑导出备份文件，发给同事，在 B 电脑导入即可看到同一份资料。</li>
+        <li data-i18n="bkHow3">管理模式（右上角按钮）输入密码后可新增/编辑供应商与产品；浏览模式仅查看。</li>
+      </ul>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div data-i18n="footerNote">Factory Database · 团队共享资料 · 请经常下载备份</div>
+  <div class="warn" data-i18n="footerWarn">数据存于浏览器本地，定期导出备份以防丢失</div>
+</footer>
+
+<!-- ===== 模态：供应商表单 ===== -->
+<div class="modal-mask" id="modalSp">
+  <div class="modal">
+    <h3 id="spModalTitle">新增供应商</h3>
+    <div class="form-grid">
+      <div class="full"><label data-i18n="fName">供应商名称</label><input id="spFormName" placeholder="如：义乌XX电子厂"></div>
+      <div><label data-i18n="fContact">联系人</label><input id="spFormContact"></div>
+      <div><label data-i18n="fPhone">联系方式</label><input id="spFormPhone" placeholder="电话 / 微信"></div>
+      <div class="full"><label data-i18n="fMain">主营产品</label><input id="spFormMain" placeholder="如：蓝牙耳机、充电宝"></div>
+      <div class="full"><label data-i18n="fRating">评价</label>
+        <select id="spFormRating">
+          <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="" data-i18n="fRatingNone">待评估</option>
+        </select>
+      </div>
+      <div class="full"><label data-i18n="fNote">备注</label><textarea id="spFormNote" rows="2"></textarea></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn ghost" id="spModalCancel" data-i18n="cancel">取消</button>
+      <button class="btn" id="spModalSave" data-i18n="save">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 模态：产品表单 ===== -->
+<div class="modal-mask" id="modalPd">
+  <div class="modal" style="max-width:620px">
+    <h3 id="pdModalTitle">新增产品</h3>
+    <div class="form-grid">
+      <div class="full"><label data-i18n="fName">产品名称</label><input id="pdFormName"></div>
+      <div><label data-i18n="fCat">产品分类</label><select id="pdFormCat"></select></div>
+      <div><label data-i18n="fSupplier">供应商</label><select id="pdFormSupplier"></select></div>
+      <div class="full"><label data-i18n="fParams">产品参数</label><input id="pdFormParams" placeholder="如：蓝牙5.3；单次续航5小时；Type-C充电"></div>
+      <div><label data-i18n="fPrice">产品价格（人民币）</label><input id="pdFormPrice" type="number" step="0.01" min="0" placeholder="0.00"></div>
+      <div><label data-i18n="fNote">备注</label><input id="pdFormNote"></div>
+      <div class="full">
+        <label data-i18n="fImg">产品图片</label>
+        <div class="img-preview" id="pdImgPreview"><span class="ph" data-i18n="imgPh">未添加图片</span></div>
+        <div class="img-tools">
+          <label class="btn ghost sm" for="pdImgFile" data-i18n="imgUpload">本地上传</label>
+          <input type="file" id="pdImgFile" accept="image/*">
+          <div class="url-row"><input id="pdImgUrl" placeholder="或粘贴图片链接 https://…"><button class="btn ghost sm" id="pdImgUrlBtn" data-i18n="imgUse">使用链接</button></div>
+        </div>
+        <div class="img-tip" data-i18n="imgTip">建议上传小于 200KB 的图片；本地图片会存入本浏览器数据中。</div>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn ghost" id="pdModalCancel" data-i18n="cancel">取消</button>
+      <button class="btn" id="pdModalSave" data-i18n="save">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 模态：管理模式密码 ===== -->
+<div class="modal-mask" id="modalAdmin">
+  <div class="modal" style="max-width:420px">
+    <h3 data-i18n="amTitle">管理模式</h3>
+    <div class="form-grid">
+      <div class="full"><label data-i18n="amPwd">管理密码</label><input id="amPwd" type="password"></div>
+      <div class="full" id="amHint" style="display:none;color:var(--danger);font-size:12px" data-i18n="amHint">密码不正确，默认密码 YOURZ2026</div>
+    </div>
+    <div class="form-actions">
+      <button class="btn ghost" id="amCancel" data-i18n="cancel">取消</button>
+      <button class="btn" id="amEnter" data-i18n="amEnter">进入管理模式</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ============================================================
+   Factory Database / 工厂资料库
+   单文件应用 · 数据存 localStorage · 浏览只读 + 管理模式编辑
+   ============================================================ */
+
+/* ---------- 多语言 ---------- */
+var I18N = {
+  zh: {
+    brandName:"Factory Database", brandSub:"工厂资料库 · 团队共享",
+    navOverview:"总览", navSuppliers:"供应商", navProducts:"产品资料", navQuote:"报价单", navBackup:"备份",
+    editMode:"管理模式",
+    ovTitle:"资料库总览", ovSub:"团队共享的工厂与产品资料库，请定期导出备份。",
+    stSuppliers:"供应商数量", stProducts:"产品数量", stCats:"产品分类", stBackup:"上次备份",
+    ovRecent:"最近添加的产品",
+    spTitle:"供应商库", spSub:"管理合作的工厂与供应商，包括联系方式、主营产品与评价。",
+    pdTitle:"产品资料", pdSub:"每款产品的图片、参数与价格，可搜索、按分类筛选。",
+    qtTitle:"生成报价单", qtSub:"勾选产品，生成报价单并打印/导出。价格统一人民币报价。",
+    bkTitle:"数据备份", bkSub:"资料保存在本地浏览器。请定期导出备份，换设备时导入恢复。",
+    searchSuppliers:"搜索供应商名称、联系人、主营产品…", searchProducts:"搜索产品名称、参数、供应商…",
+    allCats:"全部分类", clearFilter:"清除筛选", noData:"暂无数据", noProducts:"暂无产品",
+    fName:"供应商名称 / 产品名称", fContact:"联系人", fPhone:"联系方式", fMain:"主营产品", fRating:"评价", fRatingNone:"待评估", fNote:"备注",
+    fCat:"产品分类", fSupplier:"供应商", fParams:"产品参数", fPrice:"产品价格（人民币）", fImg:"产品图片",
+    fProdCount:"产品数",
+    addSupplier:"新增供应商", editSupplier:"编辑供应商", addProduct:"新增产品", editProduct:"编辑产品",
+    delete:"删除", edit:"编辑", save:"保存", cancel:"取消", confirmDelete:"确认删除这项数据？",
+    saved:"已保存", deleted:"已删除", added:"已新增",
+    needAdmin:"需要先进入管理模式才能编辑",
+    amTitle:"管理模式", amPwd:"管理密码", amEnter:"进入管理模式", amHint:"密码不正确，默认密码 YOURZ2026",
+    amExited:"已退出管理模式", amEntered:"已进入管理模式",
+    qtFilter:"筛选产品", qtClear:"清空已选", qtPrint:"打印 / 保存 PDF", qtExport:"导出 CSV",
+    quoteEmpty:"左侧勾选产品后，报价单会显示在这里", quoteTitle:"产品报价单", quoteNo:"报价单号", quoteDate:"日期",
+    quoteCompany:"义乌市优兹电子科技有限公司", quoteAddr:"地址：义乌市国际商贸城二区38号门3楼四街17581", quoteTel:"电话：18659963455",
+    quoteCol1:"序号", quoteCol2:"产品名称", quoteCol3:"参数", quoteCol4:"单价", quoteCol5:"备注",
+    quoteTotal:"合计", quoteNoteNote:"感谢询价！以上价格为人民币报价，如有需求欢迎随时联系。",
+    selectedCount:"已选 {n} 项",
+    bkExportTitle:"导出全部备份", bkExportDesc:"下载一个 JSON 备份文件，包含所有供应商与产品数据。建议每周导出一次。", bkExport:"导出备份文件",
+    bkImportTitle:"导入备份", bkImportDesc:"选择之前导出的 JSON 文件，恢复数据到本浏览器（将覆盖当前数据）。", bkImport:"选择文件导入",
+    bkExcelTitle:"导出 Excel(CSV)", bkExcelDesc:"把产品资料导出为 CSV 表格，可用 Excel 打开，方便整理与分享。", bkExcel:"导出产品 CSV",
+    bkHowTitle:"备份与共享说明", bkHow1:"本网站数据保存在当前浏览器的本地存储中，不同电脑之间不会自动同步。",
+    bkHow2:"团队共享方式：在 A 电脑导出备份文件，发给同事，在 B 电脑导入即可看到同一份资料。",
+    bkHow3:"管理模式（右上角按钮）输入密码后可新增/编辑供应商与产品；浏览模式仅查看。",
+    bkExported:"备份已导出", bkImported:"备份导入成功", bkImportErr:"备份文件无效，导入失败",
+    csvExported:"CSV 已导出", lastBackup:"从未备份",
+    imgUpload:"本地上传", imgUse:"使用链接", imgPh:"未添加图片", imgTip:"建议上传小于 200KB 的图片；本地图片会存入本浏览器数据中。",
+    cloudTitle:"云端共享（Supabase）", cloudDesc:"配置后，数据将保存到云端数据库，任何电脑（含国外）打开本网站都能看到同一份数据。",
+    cloudUrl:"Supabase 项目 URL", cloudKey:"anon public key",
+    cloudConnect:"保存并连接云端", cloudTest:"测试连接", cloudReset:"断开云端（回到本地）",
+    cloudStatusOn:"云端已连接", cloudStatusOff:"本地模式",
+    cloudSqlTitle:"首次使用：先在 Supabase SQL Editor 执行下面建表语句（一次即可）", cloudSqlCopy:"复制 SQL", cloudSqlCopied:"SQL 已复制",
+    cloudNote:"提示：anon key 只用于前端连接；请勿把 service_role key 填入。连接后会自动把当前本地数据同步到云端。",
+    cloudNeed:"请先填写项目 URL 和 anon key", cloudConnecting:"正在连接…",
+    cloudTestOk:"连接成功，云端数据可读写", cloudTestFail:"连接失败",
+    cloudConnected:"已连接云端，数据已同步", cloudResetOk:"已断开云端，回到本地模式",
+    cloudSyncFail:"云端同步失败", cloudLoadFail:"云端数据加载失败，已用本地缓存",
+    supplier:"供应商", category:"分类", price:"价格", updated:"更新"
+  },
+  en: {
+    brandName:"Factory Database", brandSub:"Shared Factory Database",
+    navOverview:"Overview", navSuppliers:"Suppliers", navProducts:"Products", navQuote:"Quote", navBackup:"Backup",
+    editMode:"Edit Mode",
+    ovTitle:"Database Overview", ovSub:"Team-shared factory & product database. Export backups regularly.",
+    stSuppliers:"Suppliers", stProducts:"Products", stCats:"Categories", stBackup:"Last Backup",
+    ovRecent:"Recently Added",
+    spTitle:"Suppliers", spSub:"Manage partner factories and suppliers, contacts, main products and ratings.",
+    pdTitle:"Products", pdSub:"Images, specs and prices for every product. Search and filter by category.",
+    qtTitle:"Build a Quote", qtSub:"Select products to generate a quotation, print or export. Prices in CNY.",
+    bkTitle:"Backup", bkSub:"Data is stored in this browser. Export backups regularly and import to restore.",
+    searchSuppliers:"Search suppliers, contacts, products…", searchProducts:"Search products, specs, suppliers…",
+    allCats:"All Categories", clearFilter:"Clear", noData:"No data", noProducts:"No products",
+    fName:"Name", fContact:"Contact", fPhone:"Contact Info", fMain:"Main Products", fRating:"Rating", fRatingNone:"TBD", fNote:"Notes",
+    fCat:"Category", fSupplier:"Supplier", fParams:"Specs", fPrice:"Price (CNY)", fImg:"Product Image",
+    fProdCount:"Products",
+    addSupplier:"Add Supplier", editSupplier:"Edit Supplier", addProduct:"Add Product", editProduct:"Edit Product",
+    delete:"Delete", edit:"Edit", save:"Save", cancel:"Cancel", confirmDelete:"Delete this item?",
+    saved:"Saved", deleted:"Deleted", added:"Added",
+    needAdmin:"Enter Edit Mode first to make changes",
+    amTitle:"Edit Mode", amPwd:"Password", amEnter:"Enter Edit Mode", amHint:"Wrong password. Default: YOURZ2026",
+    amExited:"Left Edit Mode", amEntered:"Entered Edit Mode",
+    qtFilter:"Filter", qtClear:"Clear All", qtPrint:"Print / PDF", qtExport:"Export CSV",
+    quoteEmpty:"Select products on the left to build the quote", quoteTitle:"Quotation", quoteNo:"Quote No.", quoteDate:"Date",
+    quoteCompany:"Yiwu Youzi Electronic Technology Co., Ltd.", quoteAddr:"Addr: 17581, 4th St, 3F, Gate 38, Intl Trade City Zone 2, Yiwu", quoteTel:"Tel: +86 186 5996 3455",
+    quoteCol1:"#", quoteCol2:"Product", quoteCol3:"Specs", quoteCol4:"Unit Price", quoteCol5:"Notes",
+    quoteTotal:"Total", quoteNoteNote:"Prices are in CNY. Feel free to contact us for any inquiry.",
+    selectedCount:"{n} selected",
+    bkExportTitle:"Export Full Backup", bkExportDesc:"Download a JSON backup with all suppliers and products. Recommended weekly.", bkExport:"Export Backup",
+    bkImportTitle:"Import Backup", bkImportDesc:"Choose a previously exported JSON file to restore (overwrites current data).", bkImport:"Import File",
+    bkExcelTitle:"Export Excel (CSV)", bkExcelDesc:"Export products as CSV, openable in Excel for organizing and sharing.", bkExcel:"Export CSV",
+    bkHowTitle:"Backup & Sharing", bkHow1:"Data is stored locally in this browser; it does not sync across computers automatically.",
+    bkHow2:"To share: export on computer A, send the file, import on computer B.",
+    bkHow3:"Click Edit Mode (top right), enter password to add/edit; browse mode is read-only.",
+    bkExported:"Backup exported", bkImported:"Backup imported", bkImportErr:"Invalid backup file",
+    csvExported:"CSV exported", lastBackup:"Never",
+    imgUpload:"Upload", imgUse:"Use URL", imgPh:"No image", imgTip:"Keep images under 200KB; local images are stored in browser data.",
+    cloudTitle:"Cloud Sync (Supabase)", cloudDesc:"Once configured, data is stored in a cloud database. Any computer (incl. overseas) sees the same data.",
+    cloudUrl:"Supabase Project URL", cloudKey:"anon public key",
+    cloudConnect:"Save & Connect", cloudTest:"Test", cloudReset:"Disconnect (local mode)",
+    cloudStatusOn:"Cloud Connected", cloudStatusOff:"Local Mode",
+    cloudSqlTitle:"First time: run this SQL once in Supabase SQL Editor", cloudSqlCopy:"Copy SQL", cloudSqlCopied:"SQL copied",
+    cloudNote:"Tip: anon key is for frontend use only. Never fill in the service_role key. Current local data will sync to cloud after connecting.",
+    cloudNeed:"Fill in Project URL and anon key first", cloudConnecting:"Connecting…",
+    cloudTestOk:"Connected, cloud data is readable/writable", cloudTestFail:"Connection failed",
+    cloudConnected:"Cloud connected, data synced", cloudResetOk:"Disconnected, back to local mode",
+    cloudSyncFail:"Cloud sync failed", cloudLoadFail:"Cloud load failed, using local cache",
+    supplier:"Supplier", category:"Category", price:"Price", updated:"Updated"
+  }
+};
+var LANG = localStorage.getItem("fdb_lang") || "zh";
+var T = I18N[LANG];
+
+/* ---------- 状态 ---------- */
+var ADMIN = false;
+var EDITING_ID = { sp:null, pd:null };
+var SELECTED = {};   // quote 勾选 {id:true}
+var CATS = [];       // 分类选项
+var QUOTE_NO = "";
+
+var DB_KEY = "fdb_data_v1";
+var DEFAULT_DATA = {
+  settings: { adminPwd: "YOURZ2026", company: "", address: "", phone: "" },
+  suppliers: [
+    { id:"s1", name:"示例供应商A（电子）", contact:"王经理", phone:"13900000001", main:"蓝牙耳机、TWS耳机", rating:"A", note:"合作稳定，打样快" },
+    { id:"s2", name:"示例供应商B（配件）", contact:"李工", phone:"13900000002", main:"数据线、充电器、充电宝", rating:"B", note:"价格有优势" },
+    { id:"s3", name:"示例供应商C（礼赠品）", contact:"陈姐", phone:"13900000003", main:"礼品类、小家电", rating:"C", note:"起订量较高" }
+  ],
+  products: [
+    { id:"p1", name:"A6S E7S 蓝牙耳机（示例）", category:"蓝牙耳机", supplier:"示例供应商A（电子）", image:"", params:"蓝牙5.3；半入耳式；单次续航5小时，含仓24小时；Type-C充电；触控操作", price:12.8, note:"示例数据" },
+    { id:"p2", name:"透明air39 蓝牙耳机（示例）", category:"蓝牙耳机", supplier:"示例供应商A（电子）", image:"", params:"蓝牙5.3；透明外壳；ENC通话降噪；双设备连接", price:15.5, note:"示例数据" },
+    { id:"p3", name:"K36 TWS 无线耳机（示例）", category:"蓝牙耳机", supplier:"示例供应商A（电子）", image:"", params:"蓝牙5.3；单耳3.5g；续航6小时；IPX4防水", price:14.2, note:"示例数据" },
+    { id:"p4", name:"22.5W 快充充电宝 20000mAh（示例）", category:"充电宝", supplier:"示例供应商B（配件）", image:"", params:"20000mAh；22.5W双向快充；双USB+Type-C；LED数显", price:28.5, note:"示例数据" },
+    { id:"p5", name:"100W 快充编织数据线（示例）", category:"数据线", supplier:"示例供应商B（配件）", image:"", params:"100W；PD/QC协议；尼龙编织；1.2米", price:3.6, note:"示例数据" },
+    { id:"p6", name:"磁吸三合一无线充电器（示例）", category:"充电器", supplier:"示例供应商B（配件）", image:"", params:"手机+手表+耳机三合一；15W；折叠便携", price:22, note:"示例数据" }
+  ]
+};
+var DB = loadDB();
+
+/* ---------- 云端（Supabase）数据层 ---------- */
+var CLOUD_KEY = "fdb_cloud_v1";
+var CLOUD = null; // {url, key, client}
+
+function loadDB(){
+  try {
+    var raw = localStorage.getItem(DB_KEY);
+    if(raw){ var d = JSON.parse(raw); if(d && d.suppliers && d.products) return d; }
+  } catch(e){}
+  return JSON.parse(JSON.stringify(DEFAULT_DATA));
+}
+function saveDB(){
+  localStorage.setItem(DB_KEY, JSON.stringify(DB));
+  if(CLOUD){
+    cloudPushAll().then(function(){}).catch(function(e){
+      toast(T.cloudSyncFail+": "+e.message, false);
+    });
+  }
+}
+function loadCloudConfig(){
+  try {
+    var raw = localStorage.getItem(CLOUD_KEY);
+    if(raw){ var c = JSON.parse(raw); if(c && c.url && c.key) return c; }
+  } catch(e){}
+  return null;
+}
+function saveCloudConfig(c){
+  if(c) localStorage.setItem(CLOUD_KEY, JSON.stringify({url:c.url, key:c.key}));
+  else localStorage.removeItem(CLOUD_KEY);
+}
+function initCloud(){
+  var c = loadCloudConfig();
+  if(!c || !window.supabase) return false;
+  CLOUD = { url:c.url, key:c.key, client: window.supabase.createClient(c.url, c.key) };
+  return true;
+}
+async function cloudPull(){
+  if(!CLOUD) return null;
+  var sp = await CLOUD.client.from("suppliers").select("*");
+  var pd = await CLOUD.client.from("products").select("*");
+  if(sp.error) throw new Error(sp.error.message);
+  if(pd.error) throw new Error(pd.error.message);
+  return { suppliers: sp.data||[], products: pd.data||[] };
+}
+async function cloudPushAll(){
+  if(!CLOUD) return;
+  var sp = DB.suppliers.map(function(s){
+    return { id:s.id, name:s.name, contact:s.contact||"", phone:s.phone||"", main:s.main||"", rating:s.rating||"", note:s.note||"" };
+  });
+  var pd = DB.products.map(function(p){
+    return { id:p.id, name:p.name, category:p.category||"", supplier:p.supplier||"", image:p.image||"", params:p.params||"", price:Number(p.price)||0, note:p.note||"" };
+  });
+  var a = await CLOUD.client.from("suppliers").upsert(sp, {onConflict:"id"});
+  if(a.error) throw new Error(a.error.message);
+  var b = await CLOUD.client.from("products").upsert(pd, {onConflict:"id"});
+  if(b.error) throw new Error(b.error.message);
+}
+async function cloudTestConnection(url, key){
+  var cl = window.supabase.createClient(url, key);
+  var r = await cl.from("suppliers").select("id").limit(1);
+  if(r.error) throw new Error(r.error.message);
+  return true;
+}
+function refreshCats(){
+  var m = {};
+  DB.products.forEach(function(p){ if(p.category) m[p.category]=1; });
+  CATS = Object.keys(m).sort();
+}
+var CLOUD_SQL = "-- 工厂资料库建表语句（在 Supabase SQL Editor 中执行一次即可）\ncreate table public.suppliers (\n  id text primary key,\n  name text not null,\n  contact text,\n  phone text,\n  main text,\n  rating text,\n  note text\n);\ncreate table public.products (\n  id text primary key,\n  name text not null,\n  category text,\n  supplier text,\n  image text,\n  params text,\n  price numeric,\n  note text\n);\nalter table public.suppliers enable row level security;\nalter table public.products enable row level security;\ncreate policy \"anon all suppliers\" on public.suppliers for all using (true) with check (true);\ncreate policy \"anon all products\" on public.products for all using (true) with check (true);\ngrant all on public.suppliers to anon, authenticated;\ngrant all on public.products to anon, authenticated;";
+function updateCloudUI(ok){
+  var tag=$("cloudStatus");
+  var hc=$("headerCloud");
+  if(ok && CLOUD){
+    tag.textContent = T.cloudStatusOn;
+    tag.className = "tag";
+    tag.style.background="rgba(52,211,153,.12)";
+    tag.style.color="var(--success)";
+    tag.style.borderColor="rgba(52,211,153,.4)";
+    if(hc){ hc.textContent=T.cloudStatusOn; hc.className="tag"; hc.style.background="rgba(52,211,153,.12)"; hc.style.color="var(--success)"; hc.style.borderColor="rgba(52,211,153,.4)"; hc.style.display=""; }
+  } else {
+    tag.textContent = T.cloudStatusOff;
+    tag.className = "tag amber";
+    if(hc){ hc.textContent=T.cloudStatusOff; hc.className="tag amber"; hc.style.display=""; }
+  }
+  var c = loadCloudConfig();
+  if(c){
+    $("cloudUrl").value = c.url;
+    $("cloudKey").value = c.key;
+  }
+  $("cloudHelp").innerHTML =
+    '<div style="border:1px solid var(--border);border-radius:8px;padding:10px;background:var(--surface2);margin-top:4px">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'+
+    '<span style="color:var(--muted)">'+esc(T.cloudSqlTitle)+'</span>'+
+    '<button class="btn ghost sm" id="cloudSqlCopy" style="margin:0">'+esc(T.cloudSqlCopy)+'</button></div>'+
+    '<pre style="margin:0;font-size:11px;line-height:1.5;color:var(--text);overflow-x:auto;white-space:pre-wrap;word-break:break-all">'+esc(CLOUD_SQL)+'</pre></div>'+
+    '<div style="margin-top:8px;color:var(--accent2)">'+esc(T.cloudNote)+'</div>';
+  var copyBtn=$("cloudSqlCopy");
+  if(copyBtn) copyBtn.addEventListener("click",function(){
+    var ta=document.createElement("textarea");
+    ta.value=CLOUD_SQL; document.body.appendChild(ta); ta.select();
+    try{ document.execCommand("copy"); }catch(e){}
+    ta.remove();
+    toast(T.cloudSqlCopied,true);
+  });
+}
+
+/* ---------- 工具 ---------- */
+function $(id){ return document.getElementById(id); }
+function esc(s){
+  return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+function fmtMoney(n){
+  n = Number(n)||0;
+  return n.toLocaleString("zh-CN",{minimumFractionDigits:2, maximumFractionDigits:2});
+}
+function uid(){ return "id"+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+var toastTimer=null;
+function toast(msg, ok){
+  var el=$("toast");
+  el.textContent=msg; el.className="show"+(ok?" ok":ok===false?" err":"");
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(function(){ el.className=""; },2600);
+}
+function isAdmin(){ return ADMIN; }
+function requireAdmin(act){
+  if(!ADMIN){ toast(T.needAdmin,false); return false; }
+  return true;
+}
+
+/* ---------- 多语言应用 ---------- */
+function applyI18n(){
+  document.querySelectorAll("[data-i18n]").forEach(function(el){
+    var k=el.getAttribute("data-i18n");
+    if(T[k]!=null) el.textContent=T[k];
+  });
+  document.querySelectorAll("[data-i18n-ph]").forEach(function(el){
+    var k=el.getAttribute("data-i18n-ph");
+    if(T[k]!=null) el.setAttribute("placeholder",T[k]);
+  });
+  document.title = LANG==="zh" ? "Factory Database / 工厂资料库" : "Factory Database / Shared Supplier Database";
+}
+
+/* ---------- 渲染：总览 ---------- */
+function renderOverview(){
+  $("stSuppliers").textContent = DB.suppliers.length;
+  $("stProducts").textContent = DB.products.length;
+  $("stCats").textContent = CATS.length;
+  var last = localStorage.getItem("fdb_last_backup");
+  $("stBackup").textContent = last || T.lastBackup;
+  var recent = DB.products.slice().sort(function(a,b){ return (b._t||0)-(a._t||0); }).slice(0,4);
+  $("recentGrid").innerHTML = recent.map(prodCardHTML).join("");
+}
+
+/* ---------- 渲染：供应商 ---------- */
+function renderSuppliers(){
+  var q = ($("spSearch").value||"").trim().toLowerCase();
+  var list = DB.suppliers.filter(function(s){
+    if(!q) return true;
+    return (s.name||"").toLowerCase().indexOf(q)>=0 || (s.contact||"").toLowerCase().indexOf(q)>=0 || (s.main||"").toLowerCase().indexOf(q)>=0;
+  });
+  $("spEmpty").style.display = list.length?"none":"";
+  $("spTbody").innerHTML = list.map(function(s){
+    var cnt = DB.products.filter(function(p){ return p.supplier===s.name; }).length;
+    var act = isAdmin()
+      ? '<div class="row-actions"><button class="btn ghost sm" onclick="editSp(\''+s.id+'\')">'+esc(T.edit)+'</button><button class="btn danger sm" onclick="delSp(\''+s.id+'\')">'+esc(T.delete)+'</button></div>'
+      : '<div class="row-actions"><button class="btn ghost sm" onclick="toast(T.needAdmin,false)">'+esc(T.edit)+'</button></div>';
+    return '<tr><td><div class="name">'+esc(s.name)+'</div>'+(s.note?'<div class="sub">'+esc(s.note)+'</div>':'')+'</td>'+
+      '<td>'+esc(s.contact||"-")+'</td><td>'+esc(s.phone||"-")+'</td>'+
+      '<td>'+esc(s.main||"-")+'</td>'+
+      '<td>'+(s.rating?'<span class="tag">'+esc(s.rating)+'</span>':'<span class="tag amber">'+esc(T.fRatingNone)+'</span>')+'</td>'+
+      '<td>'+cnt+'</td><td>'+act+'</td></tr>';
+  }).join("");
+}
+function renderSpHead(){
+  $("spHeadActions").innerHTML = isAdmin()
+    ? '<button class="btn" onclick="addSp()">'+esc(T.addSupplier)+'</button>'
+    : '<button class="btn ghost" onclick="toast(T.needAdmin,false)">'+esc(T.addSupplier)+'</button>';
+}
+function addSp(){
+  if(!requireAdmin()) return;
+  EDITING_ID.sp=null;
+  $("spModalTitle").textContent=T.addSupplier;
+  ["spFormName","spFormContact","spFormPhone","spFormMain","spFormNote"].forEach(function(i){$(i).value="";});
+  $("spFormRating").value="A";
+  $("modalSp").classList.add("open");
+}
+function editSp(id){
+  if(!requireAdmin()) return;
+  var s = DB.suppliers.find(function(x){return x.id===id;}); if(!s) return;
+  EDITING_ID.sp=id;
+  $("spModalTitle").textContent=T.editSupplier;
+  $("spFormName").value=s.name||""; $("spFormContact").value=s.contact||"";
+  $("spFormPhone").value=s.phone||""; $("spFormMain").value=s.main||"";
+  $("spFormRating").value=s.rating||""; $("spFormNote").value=s.note||"";
+  $("modalSp").classList.add("open");
+}
+function delSp(id){
+  if(!requireAdmin()) return;
+  if(!confirm(T.confirmDelete)) return;
+  DB.suppliers = DB.suppliers.filter(function(x){return x.id!==id;});
+  saveDB(); renderAll(); toast(T.deleted,true);
+}
+function saveSp(){
+  var name=$("spFormName").value.trim();
+  if(!name){ toast(T.fName+" ✕",false); return; }
+  if(EDITING_ID.sp){
+    var s=DB.suppliers.find(function(x){return x.id===EDITING_ID.sp;});
+    if(s){ s.name=name; s.contact=$("spFormContact").value.trim(); s.phone=$("spFormPhone").value.trim(); s.main=$("spFormMain").value.trim(); s.rating=$("spFormRating").value; s.note=$("spFormNote").value.trim(); }
+  } else {
+    DB.suppliers.push({ id:uid(), name:name, contact:$("spFormContact").value.trim(), phone:$("spFormPhone").value.trim(), main:$("spFormMain").value.trim(), rating:$("spFormRating").value, note:$("spFormNote").value.trim() });
+  }
+  saveDB(); renderAll(); $("modalSp").classList.remove("open"); toast(EDITING_ID.sp?T.saved:T.added,true);
+}
+
+/* ---------- 渲染：产品 ---------- */
+function prodCardHTML(p){
+  var img = p.image
+    ? '<img src="'+esc(p.image)+'" alt="'+esc(p.name)+'" loading="lazy">'
+    : '<svg viewBox="0 0 24 24" fill="none" stroke="#4A5A7C" stroke-width="1.6"><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>';
+  var opts = isAdmin()
+    ? '<div class="opts"><button class="btn ghost sm" onclick="editPd(\''+p.id+'\')">'+esc(T.edit)+'</button><button class="btn danger sm" onclick="delPd(\''+p.id+'\')">'+esc(T.delete)+'</button></div>'
+    : '<div class="opts"><button class="btn ghost sm" onclick="toast(T.needAdmin,false)">'+esc(T.edit)+'</button></div>';
+  return '<div class="prod"><div class="img">'+img+'</div><div class="body">'+
+    '<div class="pname">'+esc(p.name)+'</div>'+
+    '<div class="meta">'+(p.category?'<span class="tag">'+esc(p.category)+'</span>':'')+(p.supplier?'<span class="tag amber">'+esc(p.supplier)+'</span>':'')+'</div>'+
+    (p.params?'<div class="params">'+esc(p.params)+'</div>':'')+
+    '<div class="foot"><span class="price">¥ '+fmtMoney(p.price)+'</span>'+opts+'</div></div></div>';
+}
+function renderProducts(){
+  var q=($("pdSearch").value||"").trim().toLowerCase();
+  var cat=$("pdCatFilter").value;
+  var list=DB.products.filter(function(p){
+    if(cat && p.category!==cat) return false;
+    if(!q) return true;
+    return (p.name||"").toLowerCase().indexOf(q)>=0 || (p.params||"").toLowerCase().indexOf(q)>=0 || (p.supplier||"").toLowerCase().indexOf(q)>=0;
+  });
+  list.sort(function(a,b){ return (b._t||0)-(a._t||0); });
+  $("pdEmpty").style.display = list.length?"none":"";
+  $("prodGrid").innerHTML = list.map(prodCardHTML).join("");
+  $("pdClearFilter").style.display = cat?"":"none";
+}
+function renderPdHead(){
+  $("pdHeadActions").innerHTML = isAdmin()
+    ? '<button class="btn" onclick="addPd()">'+esc(T.addProduct)+'</button>'
+    : '<button class="btn ghost" onclick="toast(T.needAdmin,false)">'+esc(T.addProduct)+'</button>';
+}
+function renderCatFilter(){
+  var sel=$("pdCatFilter"), cur=sel.value;
+  var html='<option value="" data-i18n="allCats">'+esc(T.allCats)+'</option>'+CATS.map(function(c){return '<option'+(c===cur?' selected':'')+'>'+esc(c)+'</option>';}).join("");
+  sel.innerHTML=html;
+}
+function fillPdFormCats(sel, cur){
+  var html='<option value="" data-i18n="noneCat">'+esc(T.fCat)+'</option>'+CATS.map(function(c){return '<option'+(c===cur?' selected':'')+'>'+esc(c)+'</option>';}).join("");
+  html += '<option value="__new__">+ '+esc(T.fCat)+'…</option>';
+  sel.innerHTML=html;
+}
+function fillPdFormSuppliers(sel, cur){
+  var html='<option value="">—</option>'+DB.suppliers.map(function(s){return '<option'+(s.name===cur?' selected':'')+'>'+esc(s.name)+'</option>';}).join("");
+  sel.innerHTML=html;
+}
+function addPd(){
+  if(!requireAdmin()) return;
+  EDITING_ID.pd=null;
+  $("pdModalTitle").textContent=T.addProduct;
+  ["pdFormName","pdFormParams","pdFormNote","pdFormPrice"].forEach(function(i){$(i).value="";});
+  $("pdFormCat").value=""; fillPdFormCats($("pdFormCat"),"");
+  $("pdFormSupplier").value=""; fillPdFormSuppliers($("pdFormSupplier"),"");
+  setPdImg("");
+  $("modalPd").classList.add("open");
+}
+function editPd(id){
+  if(!requireAdmin()) return;
+  var p=DB.products.find(function(x){return x.id===id;}); if(!p) return;
+  EDITING_ID.pd=id;
+  $("pdModalTitle").textContent=T.editProduct;
+  $("pdFormName").value=p.name||""; $("pdFormParams").value=p.params||"";
+  $("pdFormPrice").value=p.price!=null?p.price:""; $("pdFormNote").value=p.note||"";
+  fillPdFormCats($("pdFormCat"),p.category||""); fillPdFormSuppliers($("pdFormSupplier"),p.supplier||"");
+  setPdImg(p.image||"");
+  $("modalPd").classList.add("open");
+}
+function delPd(id){
+  if(!requireAdmin()) return;
+  if(!confirm(T.confirmDelete)) return;
+  DB.products=DB.products.filter(function(x){return x.id!==id;});
+  delete SELECTED[id];
+  saveDB(); renderAll(); toast(T.deleted,true);
+}
+var PD_IMG="";
+function setPdImg(src){
+  PD_IMG=src||"";
+  var box=$("pdImgPreview");
+  if(PD_IMG){ box.innerHTML='<img src="'+esc(PD_IMG)+'" alt="">'; }
+  else { box.innerHTML='<span class="ph">'+esc(T.imgPh)+'</span>'; }
+}
+function savePd(){
+  var name=$("pdFormName").value.trim();
+  if(!name){ toast(T.fName+" ✕",false); return; }
+  var cat=$("pdFormCat").value;
+  if(cat==="__new__"){ cat=window.prompt(T.fCat); if(!cat) return; if(CATS.indexOf(cat)<0) CATS.push(cat); }
+  var price=parseFloat($("pdFormPrice").value);
+  if(isNaN(price)||price<0) price=0;
+  var obj={ name:name, category:cat, supplier:$("pdFormSupplier").value, params:$("pdFormParams").value.trim(), price:price, note:$("pdFormNote").value.trim(), image:PD_IMG, _t:Date.now() };
+  if(EDITING_ID.pd){
+    var p=DB.products.find(function(x){return x.id===EDITING_ID.pd;});
+    if(p){ Object.keys(obj).forEach(function(k){p[k]=obj[k];}); }
+  } else {
+    obj.id=uid(); DB.products.push(obj);
+  }
+  saveDB(); renderAll(); $("modalPd").classList.remove("open"); toast(EDITING_ID.pd?T.saved:T.added,true);
+}
+
+/* ---------- 渲染：报价单 ---------- */
+function renderQuoteList(){
+  var q=($("qtSearch").value||"").trim().toLowerCase();
+  var cat=$("qtCat").value;
+  var list=DB.products.filter(function(p){
+    if(cat && p.category!==cat) return false;
+    if(!q) return true;
+    return (p.name||"").toLowerCase().indexOf(q)>=0 || (p.params||"").toLowerCase().indexOf(q)>=0;
+  });
+  $("qtEmpty").style.display = list.length?"none":"";
+  $("qtList").innerHTML = list.map(function(p){
+    var on=SELECTED[p.id];
+    var img=p.image?'<img src="'+esc(p.image)+'" alt="">':'<span style="width:46px;height:46px;border-radius:8px;background:var(--surface2);flex-shrink:0"></span>';
+    return '<div class="quote-prod'+(on?' on':'')+'" onclick="toggleSelect(\''+p.id+'\')">'+
+      '<span class="check-badge'+(on?' on':'')+'">'+(on?'✓':'')+'</span>'+img+
+      '<div class="info"><div class="pn">'+esc(p.name)+'</div><div class="ps">'+(p.category?esc(p.category)+' · ':'')+esc(p.params||"")+'</div></div>'+
+      '<div class="pr">¥ '+fmtMoney(p.price)+'</div></div>';
+  }).join("");
+  var n=Object.keys(SELECTED).length;
+  $("qtCount").textContent=T.selectedCount.replace("{n}",n);
+  renderQuotePaper();
+}
+function toggleSelect(id){
+  if(SELECTED[id]) delete SELECTED[id]; else SELECTED[id]=true;
+  renderQuoteList();
+}
+function renderQuotePaper(){
+  var items=DB.products.filter(function(p){return SELECTED[p.id];});
+  var paper=$("quotePaper");
+  if(!items.length){ paper.innerHTML='<div class="empty" id="quoteEmpty">'+esc(T.quoteEmpty)+'</div>'; return; }
+  QUOTE_NO="Q-"+(LANG==="zh"?"Q":"Q")+"-"+new Date().toISOString().slice(0,10).replace(/-/g,"")+"-"+String(Date.now()).slice(-4);
+  var today=new Date().toLocaleDateString("zh-CN");
+  var total=items.reduce(function(s,p){return s+(Number(p.price)||0);},0);
+  var rows=items.map(function(p,i){
+    return '<tr><td>'+(i+1)+'</td><td>'+esc(p.name)+'</td><td>'+esc(p.params||"")+'</td><td class="t-right">'+fmtMoney(p.price)+'</td><td>'+esc(p.note||"")+'</td></tr>';
+  }).join("");
+  var comp=DB.settings.company||T.quoteCompany;
+  var addr=DB.settings.address||T.quoteAddr;
+  var tel=DB.settings.phone||T.quoteTel;
+  paper.innerHTML=
+    '<div class="q-head"><div><div class="q-company">'+esc(comp)+'</div>'+
+    '<div class="q-contact">'+esc(addr)+'<br>'+esc(tel)+'</div></div>'+
+    '<div class="q-no">'+esc(T.quoteNo)+'：'+esc(QUOTE_NO)+'<br>'+esc(T.quoteDate)+'：'+esc(today)+'</div></div>'+
+    '<h2>'+esc(T.quoteTitle)+'</h2>'+
+    '<table><thead><tr><th>'+esc(T.quoteCol1)+'</th><th>'+esc(T.quoteCol2)+'</th><th>'+esc(T.quoteCol3)+'</th><th class="t-right">'+esc(T.quoteCol4)+'</th><th>'+esc(T.quoteCol5)+'</th></tr></thead><tbody>'+rows+'</tbody></table>'+
+    '<div class="q-total"><div><span>'+esc(T.quoteTotal)+'</span><span class="final">¥ '+fmtMoney(total)+'</span></div></div>'+
+    '<div class="q-note">'+esc(T.quoteNoteNote)+'</div>';
+}
+function exportQuoteCsv(){
+  var items=DB.products.filter(function(p){return SELECTED[p.id];});
+  if(!items.length){ toast(T.quoteEmpty,false); return; }
+  var head=[T.quoteCol2,T.quoteCol3,T.quoteCol4,T.quoteCol5];
+  var lines=[head.join(",")];
+  items.forEach(function(p){
+    var row=[csvCell(p.name),csvCell(p.params||""),p.price,csvCell(p.note||"")];
+    lines.push(row.join(","));
+  });
+  downloadFile("quotation-"+QUOTE_NO+".csv","\ufeff"+lines.join("\r\n"),"text/csv;charset=utf-8");
+  toast(T.csvExported,true);
+}
+function csvCell(v){
+  v=String(v==null?"":v);
+  return '"'+v.replace(/"/g,'""')+'"';
+}
+
+/* ---------- 备份 ---------- */
+function downloadFile(name,content,mime){
+  var blob=new Blob([content],{type:mime||"application/octet-stream"});
+  var a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download=name;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },400);
+}
+function exportBackup(){
+  var data=JSON.stringify({ _v:1, _t:Date.now(), settings:DB.settings, suppliers:DB.suppliers, products:DB.products },null,2);
+  downloadFile("factory-db-backup-"+new Date().toISOString().slice(0,10)+".json",data,"application/json");
+  localStorage.setItem("fdb_last_backup",new Date().toLocaleDateString("zh-CN"));
+  renderOverview(); toast(T.bkExported,true);
+}
+function importBackup(file){
+  var reader=new FileReader();
+  reader.onload=function(){
+    try{
+      var d=JSON.parse(reader.result);
+      if(!d||!Array.isArray(d.suppliers)||!Array.isArray(d.products)) throw 0;
+      if(d.settings) DB.settings=d.settings;
+      DB.suppliers=d.suppliers; DB.products=d.products;
+      saveDB(); refreshCats(); renderAll(); toast(T.bkImported,true);
+    }catch(e){ toast(T.bkImportErr,false); }
+  };
+  reader.readAsText(file,"utf-8");
+}
+function exportCsv(){
+  var head=[T.fName,T.fCat,T.fSupplier,T.fParams,T.fPrice,T.fNote];
+  var lines=[head.join(",")];
+  DB.products.forEach(function(p){
+    lines.push([csvCell(p.name),csvCell(p.category||""),csvCell(p.supplier||""),csvCell(p.params||""),p.price,csvCell(p.note||"")].join(","));
+  });
+  downloadFile("products-"+new Date().toISOString().slice(0,10)+".csv","\ufeff"+lines.join("\r\n"),"text/csv;charset=utf-8");
+  toast(T.csvExported,true);
+}
+
+/* ---------- 导航 ---------- */
+function switchView(name){
+  document.querySelectorAll(".view").forEach(function(v){v.classList.remove("active");});
+  $("view-"+name).classList.add("active");
+  document.querySelectorAll("#nav button").forEach(function(b){b.classList.toggle("active",b.getAttribute("data-view")===name);});
+  renderAll();
+}
+function renderAll(){
+  refreshCats();
+  renderOverview(); renderSpHead(); renderSuppliers(); renderPdHead(); renderCatFilter(); renderProducts(); renderQuoteList();
+}
+
+/* ---------- 事件绑定 ---------- */
+function bind(){
+  document.querySelectorAll("#nav button").forEach(function(b){
+    b.addEventListener("click",function(){ switchView(b.getAttribute("data-view")); });
+  });
+  $("langBtn").addEventListener("click",function(){
+    LANG = LANG==="zh"?"en":"zh";
+    localStorage.setItem("fdb_lang",LANG);
+    T=I18N[LANG]; applyI18n(); renderAll();
+  });
+  $("editToggle").addEventListener("click",function(){
+    if(ADMIN){ ADMIN=false; $("editToggle").classList.remove("on"); $("editToggle").querySelector("span[data-i18n]").textContent=T.editMode; $("amPwd").value=""; renderAll(); toast(T.amExited,true); }
+    else { $("modalAdmin").classList.add("open"); setTimeout(function(){ $("amPwd").focus(); },60); }
+  });
+  $("amEnter").addEventListener("click",function(){
+    if($("amPwd").value===DB.settings.adminPwd){
+      ADMIN=true; $("editToggle").classList.add("on"); $("editToggle").querySelector("span[data-i18n]").textContent=T.editMode; $("modalAdmin").classList.remove("open"); renderAll(); toast(T.amEntered,true);
+    } else { $("amHint").style.display=""; }
+  });
+  $("amCancel").addEventListener("click",function(){ $("modalAdmin").classList.remove("open"); $("amHint").style.display="none"; });
+  $("modalAdmin").addEventListener("click",function(e){ if(e.target===this){ this.classList.remove("open"); } });
+  $("amPwd").addEventListener("keydown",function(e){ if(e.key==="Enter") $("amEnter").click(); });
+
+  // 供应商模态
+  $("spModalCancel").addEventListener("click",function(){ $("modalSp").classList.remove("open"); });
+  $("modalSp").addEventListener("click",function(e){ if(e.target===this) this.classList.remove("open"); });
+  $("spModalSave").addEventListener("click",saveSp);
+
+  // 产品模态
+  $("pdModalCancel").addEventListener("click",function(){ $("modalPd").classList.remove("open"); });
+  $("modalPd").addEventListener("click",function(e){ if(e.target===this) this.classList.remove("open"); });
+  $("pdModalSave").addEventListener("click",savePd);
+  $("pdImgFile").addEventListener("change",function(){
+    var f=this.files[0]; if(!f) return;
+    if(f.size>300*1024){ toast(T.imgTip,false); this.value=""; return; }
+    var r=new FileReader();
+    r.onload=function(){ setPdImg(r.result); };
+    r.readAsDataURL(f);
+  });
+  $("pdImgUrlBtn").addEventListener("click",function(){
+    var u=$("pdImgUrl").value.trim();
+    if(!u){ toast(T.imgPh,false); return; }
+    setPdImg(u); $("pdImgUrl").value="";
+  });
+
+  // 搜索 / 筛选
+  $("spSearch").addEventListener("input",renderSuppliers);
+  $("pdSearch").addEventListener("input",renderProducts);
+  $("pdCatFilter").addEventListener("change",renderProducts);
+  $("pdClearFilter").addEventListener("click",function(){ $("pdCatFilter").value=""; renderProducts(); });
+  $("qtSearchToggle").addEventListener("click",function(){ $("qtFilterBox").style.display = $("qtFilterBox").style.display==="none"?"":"none"; });
+  $("qtSearch").addEventListener("input",renderQuoteList);
+  $("qtCat").addEventListener("change",renderQuoteList);
+  $("qtClear").addEventListener("click",function(){ SELECTED={}; renderQuoteList(); });
+
+  // 报价单
+  $("qtPrint").addEventListener("click",function(){ window.print(); });
+  $("qtExport").addEventListener("click",exportQuoteCsv);
+
+  // 备份
+  $("bkExport").addEventListener("click",exportBackup);
+  $("bkImportBtn").addEventListener("click",function(){ $("bkImportFile").click(); });
+  $("bkImportFile").addEventListener("change",function(){ if(this.files[0]) importBackup(this.files[0]); this.value=""; });
+  $("bkCsv").addEventListener("click",exportCsv);
+
+  // 云端
+  $("cloudSave").addEventListener("click",async function(){
+    var url=$("cloudUrl").value.trim(), key=$("cloudKey").value.trim();
+    if(!url||!key){ toast(T.cloudNeed,false); return; }
+    $("cloudSave").disabled=true; $("cloudSave").textContent=T.cloudConnecting;
+    try{
+      await cloudTestConnection(url,key);
+      saveCloudConfig({url:url,key:key});
+      initCloud();
+      await cloudPushAll();
+      updateCloudUI(true);
+      toast(T.cloudConnected,true);
+    }catch(e){
+      toast(T.cloudTestFail+": "+e.message,false);
+    }
+    $("cloudSave").disabled=false; $("cloudSave").textContent=T.cloudConnect;
+  });
+  $("cloudTest").addEventListener("click",async function(){
+    var url=$("cloudUrl").value.trim(), key=$("cloudKey").value.trim();
+    if(!url||!key){ toast(T.cloudNeed,false); return; }
+    $("cloudTest").disabled=true; $("cloudTest").textContent=T.cloudConnecting;
+    try{
+      await cloudTestConnection(url,key);
+      toast(T.cloudTestOk,true);
+    }catch(e){
+      toast(T.cloudTestFail+": "+e.message,false);
+    }
+    $("cloudTest").disabled=false; $("cloudTest").textContent=T.cloudTest;
+  });
+  $("cloudReset").addEventListener("click",function(){
+    saveCloudConfig(null);
+    CLOUD=null;
+    updateCloudUI(false);
+    toast(T.cloudResetOk,true);
+  });
+
+  // 报价单分类下拉
+  var fillQtCat=function(){
+    var html='<option value="" data-i18n="allCats">'+esc(T.allCats)+'</option>'+CATS.map(function(c){return '<option>'+esc(c)+'</option>';}).join("");
+    $("qtCat").innerHTML=html;
+  };
+  // 在 renderAll 里刷新 qtCat —— 追加
+  var _renderAll=renderAll;
+  renderAll=function(){
+    refreshCats();
+    fillQtCat();
+    renderOverview(); renderSpHead(); renderSuppliers(); renderPdHead(); renderCatFilter(); renderProducts(); renderQuoteList();
+  };
+  // 重新绑定首轮
+  switchView("overview");
+}
+
+/* ---------- 启动 ---------- */
+document.addEventListener("DOMContentLoaded",function(){
+  applyI18n();
+  updateCloudUI(initCloud());
+  bind();
+  // 云端模式：拉取云端数据覆盖本地缓存
+  if(CLOUD){
+    cloudPull().then(function(data){
+      if(data){
+        DB.suppliers=data.suppliers;
+        DB.products=data.products;
+        localStorage.setItem(DB_KEY, JSON.stringify(DB));
+        renderAll();
+        toast(T.cloudConnected,true);
+      }
+    }).catch(function(e){
+      toast(T.cloudLoadFail+": "+e.message,false);
+    });
+  }
+});
+</script>
+</body>
+</html>
